@@ -20,6 +20,7 @@ if toggle then
 		controls = {},
 	}, function(props)
 		local position = source(UDim2.new(0.5, 0, 0.5, 0))
+		local minimized = source(false)
 
 		local dragging = false
 		local dragStart = nil
@@ -64,12 +65,33 @@ if toggle then
 						Position = UDim2.fromScale(0.02, 0.5),
 						BackgroundTransparency = 1,
 
-						Text = props.Title or "UILib",
+						Text = props.Title,
 						TextScaled = true,
 						FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
 
 						TextColor3 = textColor,
 						TextXAlignment = "Left",
+					}),
+
+					create("TextButton")({
+						Size = UDim2.fromScale(0.045, 0.7),
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.fromScale(0.98, 0.5),
+						BackgroundColor3 = primaryColor,
+
+						Text = "—",
+						TextScaled = true,
+						FontFace = Font.fromName("SourceSansPro", Enum.FontWeight.Bold),
+						TextColor3 = textColor,
+
+						create("UICorner")({
+							CornerRadius = UDim.new(0, 8),
+						}),
+
+						Activated = function()
+							minimized(not minimized())
+							print(minimized())
+						end,
 					}),
 
 					InputBegan = function(input)
