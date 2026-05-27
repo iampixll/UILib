@@ -1,3 +1,4 @@
+--[[
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -7,7 +8,6 @@ local source = vide.source
 local create = vide.create
 
 local text1 = source("Test123")
-local text2 = source("no test lol")
 
 vide.mount(function()
 	return create("ScreenGui")({
@@ -42,3 +42,4 @@ vide.mount(function()
 		}),
 	})
 end, Players.LocalPlayer.PlayerGui)
+]]
