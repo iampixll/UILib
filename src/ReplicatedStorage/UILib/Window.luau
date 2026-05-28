@@ -112,7 +112,7 @@ local function Window(props: WindowProps)
 			BackgroundColor3 = colors.background,
 
 			create("UICorner")({
-				CornerRadius = UDim.new(0, 15),
+				CornerRadius = UDim.new(0, 12),
 			}),
 
 			create("TextLabel")({
@@ -159,7 +159,7 @@ local function Window(props: WindowProps)
 
 			-- ui elements
 			create("UICorner")({
-				CornerRadius = UDim.new(0, 8),
+				CornerRadius = UDim.new(0, 15),
 			}),
 
 			create("Frame")({ --topbar
@@ -167,7 +167,7 @@ local function Window(props: WindowProps)
 				BackgroundColor3 = colors.surfaceHigh,
 
 				create("UICorner")({
-					CornerRadius = UDim.new(0, 8),
+					CornerRadius = UDim.new(0, 12),
 				}),
 
 				create("TextLabel")({
@@ -184,19 +184,17 @@ local function Window(props: WindowProps)
 					TextXAlignment = "Left",
 				}),
 
-				create("TextButton")({
+				create("ImageButton")({
 					Size = UDim2.fromScale(0.045, 0.7),
 					AnchorPoint = Vector2.new(1, 0.5),
 					Position = UDim2.fromScale(0.98, 0.5),
 					BackgroundColor3 = colors.background,
 
-					Text = "—",
-					TextScaled = true,
-					FontFace = Font.fromName("SourceSansPro", Enum.FontWeight.Bold),
-					TextColor3 = colors.textPrimary,
+					Image = "rbxassetid://71627683074088",
+					ImageColor3 = colors.textPrimary,
 
 					create("UICorner")({
-						CornerRadius = UDim.new(0, 8),
+						CornerRadius = UDim.new(0, 10),
 					}),
 
 					Activated = function()
@@ -215,7 +213,7 @@ local function Window(props: WindowProps)
 				BackgroundColor3 = colors.surfaceHigh,
 
 				create("UICorner")({
-					CornerRadius = UDim.new(0, 8),
+					CornerRadius = UDim.new(0, 12),
 				}),
 
 				create("TextLabel")({
