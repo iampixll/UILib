@@ -2,9 +2,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local vide = require(ReplicatedStorage.Packages.vide)
+local Tab = require(ReplicatedStorage.UILib.Tab)
 
 local create = vide.create
 local source = vide.source
+local indexes = vide.indexes
 local effect = vide.effect
 
 local colors = {
@@ -14,6 +16,7 @@ local colors = {
 	accent = Color3.fromRGB(88, 101, 242), -- highlights (active tab, etc.)
 	textPrimary = Color3.fromRGB(220, 223, 228),
 	textMuted = Color3.fromRGB(150, 153, 160),
+	tabInactive = Color3.fromRGB(110, 113, 120), -- dimmer than textMuted, for inactive tab text/icons
 }
 
 type WindowProps = {
@@ -79,11 +82,28 @@ local function Window(props: WindowProps)
 
 	local minimized = source(false)
 
+	local tabs = source({})
+	local activeTab = source(nil)
+
 	local function toggleMinimized()
 		minimized(not minimized())
 	end
 
-	return create("ScreenGui")({
+	local function createTab(name, image)
+		local tab = Tab.new(name, image)
+
+		local new = table.clone(tabs())
+		table.insert(new, tab)
+		tabs(new)
+
+		if activeTab() == nil then
+			activeTab(tab)
+		end
+
+		return tab
+	end
+
+	local node = create("ScreenGui")({
 
 		create("Frame")({ --topScreen frame
 			Size = UDim2.fromScale(0.1, 0.045),
@@ -217,7 +237,7 @@ local function Window(props: WindowProps)
 			}),
 
 			create("Frame")({ -- tablist
-				Size = UDim2.fromScale(0.2525, 0.75),
+				Size = UDim2.fromScale(0.225, 0.75),
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.fromScale(0.015, 0.5),
 				BackgroundColor3 = colors.background,
@@ -229,8 +249,78 @@ local function Window(props: WindowProps)
 
 					ScrollBarThickness = 4,
 					VerticalScrollBarPosition = "Left",
+
 					ScrollBarImageColor3 = colors.textMuted,
+					AutomaticCanvasSize = "Y",
+					CanvasSize = UDim2.new(),
+
 					Transparency = 1,
+
+					create("UIListLayout")({
+						Padding = UDim.new(0, 4),
+						HorizontalAlignment = "Center",
+						SortOrder = "LayoutOrder",
+					}),
+
+					indexes(tabs, function(tab, i)
+						return create("Frame")({
+							Size = UDim2.new(0.925, 0, 0, 37.5),
+
+							BackgroundColor3 = function()
+								return if activeTab() == tab() then colors.surfaceHigh else colors.background
+							end,
+
+							create("UICorner")({
+								CornerRadius = UDim.new(0, 8),
+							}),
+
+							create("TextButton")({
+								Size = UDim2.fromScale(1, 1),
+								BackgroundTransparency = 1,
+								Text = "",
+
+								Activated = function()
+									activeTab(tab())
+								end,
+							}),
+
+							create("ImageLabel")({
+								Size = UDim2.fromScale(0.7, 0.7),
+								SizeConstraint = "RelativeYY",
+								AnchorPoint = Vector2.new(0, 0.5),
+								Position = UDim2.new(0, 8, 0.5, 0),
+								BackgroundTransparency = 1,
+
+								Image = function()
+									local img = tab().image
+									return if img then "rbxassetid://" .. img else "rbxassetid://15637356511"
+								end,
+
+								ImageColor3 = function()
+									return if activeTab() == tab() then colors.textPrimary else colors.tabInactive
+								end,
+							}),
+
+							create("TextLabel")({
+								Size = UDim2.new(1, -48, 0.6, 0),
+								AnchorPoint = Vector2.new(1, 0.5),
+								Position = UDim2.new(1, -8, 0.5, 0),
+								BackgroundTransparency = 1,
+
+								Text = function()
+									return tab().name
+								end,
+
+								TextColor3 = function()
+									return if activeTab() == tab() then colors.textPrimary else colors.tabInactive
+								end,
+
+								TextXAlignment = "Left",
+								TextScaled = true,
+								FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
+							}),
+						})
+					end),
 				}),
 
 				create("UICorner")({
@@ -239,7 +329,7 @@ local function Window(props: WindowProps)
 			}),
 
 			create("Frame")({ -- current tab
-				Size = UDim2.fromScale(0.7025, 0.75),
+				Size = UDim2.fromScale(0.73, 0.75),
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.fromScale(0.985, 0.5),
 				BackgroundColor3 = colors.background,
@@ -247,9 +337,36 @@ local function Window(props: WindowProps)
 				create("UICorner")({
 					CornerRadius = UDim.new(0, 12),
 				}),
+
+				indexes(tabs, function(tab, i)
+					create("UIListLayout")({
+						Padding = UDim.new(0, 6),
+						SortOrder = "LayoutOrder",
+					})
+
+					return create("ScrollingFrame")({
+						Size = UDim2.fromScale(0.975, 0.95),
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = UDim2.fromScale(0.5, 0.5),
+						Transparency = 1,
+
+						ScrollBarThickness = 4,
+						ScrollBarImageColor3 = colors.textMuted,
+
+						Visible = function()
+							return activeTab() == tab()
+						end,
+
+						function()
+							return tab().children()
+						end,
+					})
+				end),
 			}),
 		}),
 	})
+
+	return node, { createTab = createTab }
 end
 
 return Window

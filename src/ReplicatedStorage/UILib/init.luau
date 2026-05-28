@@ -9,16 +9,18 @@ local playerGui = Players.LocalPlayer.PlayerGui
 local UILib = {}
 
 function UILib:CreateWindow(config)
-	local window = {}
-
-	local function CreateTab() end
-
-	window.CreateTab = CreateTab
-
+	local api
 	vide.mount(function()
-		return Window(config)
+		local node, returnedApi = Window(config)
+		api = returnedApi
+		return node
 	end, playerGui)
-	return window
+
+	return {
+		CreateTab = function(_, name, image)
+			return api.createTab(name, image)
+		end,
+	}
 end
 
 return UILib
