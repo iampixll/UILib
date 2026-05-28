@@ -8,12 +8,18 @@ local create = vide.create
 local source = vide.source
 local indexes = vide.indexes
 local effect = vide.effect
+local spring = vide.spring
+
+local CENTER = UDim2.new(0.5, 0, 0.5, 0)
+local CLOSED_POSITION = UDim2.new(0.5, 0, 1.5, 0) -- center horizontally, off-screen below
 
 local colors = {
 	background = Color3.fromRGB(43, 45, 49), -- darkest, content areas
 	surface = Color3.fromRGB(30, 31, 34), -- main container
 	surfaceHigh = Color3.fromRGB(57, 60, 66), -- chrome (topbar, footer, buttons)
 	accent = Color3.fromRGB(88, 101, 242), -- highlights (active tab, etc.)
+	buttonIdle = Color3.fromRGB(75, 78, 85), -- minimize button, brighter than topbar
+	buttonHover = Color3.fromRGB(95, 98, 106), -- even brighter on hover
 	textPrimary = Color3.fromRGB(220, 223, 228),
 	textMuted = Color3.fromRGB(150, 153, 160),
 	tabInactive = Color3.fromRGB(110, 113, 120), -- dimmer than textMuted, for inactive tab text/icons
@@ -80,14 +86,34 @@ local function Window(props: WindowProps)
 	local mainDrag = makeDraggable(mainFramePosition)
 	local topDrag = makeDraggable(topButtonPosition)
 
+	local topDisplayPos = spring(topButtonPosition, 0.15)
+
+	local minimizeHovered = source(false)
+	local minimizeBg = spring(function()
+		return if minimizeHovered() then colors.buttonHover else colors.buttonIdle
+	end, 0.3)
+
+	local topHovered = source(false)
+	local topBg = spring(function()
+		return if topHovered() then colors.surfaceHigh else colors.background
+	end, 0.3)
+
 	local minimized = source(false)
 
 	local tabs = source({})
 	local activeTab = source(nil)
 
 	local function toggleMinimized()
-		minimized(not minimized())
+		local nowMinimized = not minimized()
+		if not nowMinimized then
+			mainFramePosition(CENTER)
+		end
+		minimized(nowMinimized)
 	end
+
+	local displayPos = spring(function()
+		return if minimized() then CLOSED_POSITION else mainFramePosition()
+	end, 0.3)
 
 	local function createTab(name, image)
 		local tab = Tab.new(name, image)
@@ -105,11 +131,11 @@ local function Window(props: WindowProps)
 
 	local node = create("ScreenGui")({
 
-		create("Frame")({ --topScreen frame
+		create("Frame")({ --topScreen button
 			Size = UDim2.fromScale(0.1, 0.045),
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = topButtonPosition,
-			BackgroundColor3 = colors.background,
+			Position = topDisplayPos,
+			BackgroundColor3 = topBg,
 
 			create("UICorner")({
 				CornerRadius = UDim.new(0, 12),
@@ -141,6 +167,13 @@ local function Window(props: WindowProps)
 					toggleMinimized()
 				end,
 
+				MouseEnter = function()
+					topHovered(true)
+				end,
+				MouseLeave = function()
+					topHovered(false)
+				end,
+
 				InputBegan = topDrag.began,
 				InputEnded = topDrag.ended,
 			}),
@@ -149,13 +182,8 @@ local function Window(props: WindowProps)
 		create("Frame")({ --mainframe
 			Size = UDim2.fromScale(0.5, 0.55),
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = mainFramePosition,
+			Position = displayPos,
 			BackgroundColor3 = colors.surface,
-
-			-- minimize
-			Visible = function()
-				return not minimized()
-			end,
 
 			-- ui elements
 			create("UICorner")({
@@ -184,11 +212,11 @@ local function Window(props: WindowProps)
 					TextXAlignment = "Left",
 				}),
 
-				create("ImageButton")({
+				create("ImageButton")({ -- minimize button
 					Size = UDim2.fromScale(0.045, 0.7),
 					AnchorPoint = Vector2.new(1, 0.5),
 					Position = UDim2.fromScale(0.98, 0.5),
-					BackgroundColor3 = colors.background,
+					BackgroundColor3 = minimizeBg,
 
 					Image = "rbxassetid://71627683074088",
 					ImageColor3 = colors.textPrimary,
@@ -199,6 +227,13 @@ local function Window(props: WindowProps)
 
 					Activated = function()
 						toggleMinimized()
+					end,
+
+					MouseEnter = function()
+						minimizeHovered(true)
+					end,
+					MouseLeave = function()
+						minimizeHovered(false)
 					end,
 				}),
 
@@ -261,12 +296,31 @@ local function Window(props: WindowProps)
 					}),
 
 					indexes(tabs, function(tab, i)
+						local hovered = source(false)
+
+						local function targetBgColor()
+							if activeTab() == tab() then
+								return colors.surfaceHigh
+							elseif hovered() then
+								return colors.surfaceHigh
+							else
+								return colors.background
+							end
+						end
+						local bgColor = spring(targetBgColor, 0.3)
+
+						local function targetTextColor()
+							if activeTab() == tab() then
+								return colors.textPrimary
+							else
+								return colors.tabInactive
+							end
+						end
+						local textColor = spring(targetTextColor, 0.3)
+
 						return create("Frame")({
 							Size = UDim2.new(0.925, 0, 0, 37.5),
-
-							BackgroundColor3 = function()
-								return if activeTab() == tab() then colors.surfaceHigh else colors.background
-							end,
+							BackgroundColor3 = bgColor,
 
 							create("UICorner")({
 								CornerRadius = UDim.new(0, 8),
@@ -274,11 +328,20 @@ local function Window(props: WindowProps)
 
 							create("TextButton")({
 								Size = UDim2.fromScale(1, 1),
+
 								BackgroundTransparency = 1,
 								Text = "",
 
 								Activated = function()
 									activeTab(tab())
+								end,
+
+								MouseEnter = function()
+									hovered(true)
+								end,
+
+								MouseLeave = function()
+									hovered(false)
 								end,
 							}),
 
@@ -294,9 +357,7 @@ local function Window(props: WindowProps)
 									return if img then "rbxassetid://" .. img else "rbxassetid://15637356511"
 								end,
 
-								ImageColor3 = function()
-									return if activeTab() == tab() then colors.textPrimary else colors.tabInactive
-								end,
+								ImageColor3 = textColor,
 							}),
 
 							create("TextLabel")({
@@ -309,9 +370,7 @@ local function Window(props: WindowProps)
 									return tab().name
 								end,
 
-								TextColor3 = function()
-									return if activeTab() == tab() then colors.textPrimary else colors.tabInactive
-								end,
+								TextColor3 = textColor,
 
 								TextXAlignment = "Left",
 								TextScaled = true,

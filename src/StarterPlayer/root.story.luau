@@ -15,7 +15,11 @@ if toggle then
 			Title = "PixlLib",
 		})
 
-		api.createTab("Home", 15637380284)
+		api.createTab("Home", 15637376279)
+		api.createTab("Webhook", 122219359034661)
+		api.createTab("Shop", 15637380284)
+		api.createTab("Farm", 15637359494)
+		api.createTab("Egg", 15637367451)
 
 		return node
 	end)
