@@ -26,7 +26,7 @@ if toggle then
 
 		home:CreateDivider("Div")
 
-		home:CreateLabel("Label text2")
+		local label2 = home:CreateLabel("Label text2")
 
 		home:CreateButton({
 			Name = "Claim Rewards",
@@ -34,43 +34,10 @@ if toggle then
 		})
 
 		home:CreateButton({
-			Name = "Teleport Hub",
-			Callback = function() end,
-		})
-
-		home:CreateButton({
-			Name = "Sell Inventory",
-			Callback = function() end,
-		})
-
-		home:CreateButton({
-			Name = "Open Crates",
-			Callback = function() end,
-		})
-
-		home:CreateButton({
-			Name = "Upgrade Pets",
-			Callback = function() end,
-		})
-
-		home:CreateButton({
-			Name = "Collect Coins",
-			Callback = function() end,
-		})
-
-		home:CreateButton({
-			Name = "Server Hop",
-			Callback = function() end,
-		})
-
-		home:CreateButton({
-			Name = "Redeem Codes",
-			Callback = function() end,
-		})
-
-		home:CreateButton({
-			Name = "Anti AFK",
-			Callback = function() end,
+			Name = "Change Label 2 name",
+			Callback = function()
+				label2:Set("new name")
+			end,
 		})
 
 		return window.node
