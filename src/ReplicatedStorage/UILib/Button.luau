@@ -31,7 +31,7 @@ function Button.new(name, callback)
 	end, 0.3)
 
 	button.node = create("Frame")({
-		Size = UDim2.new(0.975, 0, 0, 44),
+		Size = UDim2.new(0.98, 0, 0, 44),
 		BackgroundColor3 = bgColor,
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),

@@ -18,16 +18,53 @@ if toggle then
 		local shop = window:CreateTab("Shop", 15637380284)
 
 		home:CreateButton({
-			Name = "TestButton",
+			Name = "Auto Farm",
 			Callback = function() end,
 		})
 
-		local button
-		button = home:CreateButton({
-			Name = "click me",
-			Callback = function()
-				button:Set("Clicked!")
-			end,
+		home:CreateButton({
+			Name = "Claim Rewards",
+			Callback = function() end,
+		})
+
+		home:CreateButton({
+			Name = "Teleport Hub",
+			Callback = function() end,
+		})
+
+		home:CreateButton({
+			Name = "Sell Inventory",
+			Callback = function() end,
+		})
+
+		home:CreateButton({
+			Name = "Open Crates",
+			Callback = function() end,
+		})
+
+		home:CreateButton({
+			Name = "Upgrade Pets",
+			Callback = function() end,
+		})
+
+		home:CreateButton({
+			Name = "Collect Coins",
+			Callback = function() end,
+		})
+
+		home:CreateButton({
+			Name = "Server Hop",
+			Callback = function() end,
+		})
+
+		home:CreateButton({
+			Name = "Redeem Codes",
+			Callback = function() end,
+		})
+
+		home:CreateButton({
+			Name = "Anti AFK",
+			Callback = function() end,
 		})
 
 		return window.node

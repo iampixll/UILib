@@ -369,26 +369,32 @@ local function createCurrentTab(props)
 			return create("Frame")({
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
-
 				Visible = function()
 					return props.activeTab() == tab()
 				end,
 
-				create("UIListLayout")({
-					Padding = UDim.new(0, 12),
-					HorizontalAlignment = "Center",
-					SortOrder = "LayoutOrder",
+				create("ScrollingFrame")({
+					Size = UDim2.fromScale(0.975, 0.95),
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					BackgroundTransparency = 1,
+					ScrollBarThickness = 4,
+					ScrollBarImageColor3 = colors.textMuted,
+					AutomaticCanvasSize = "Y",
+					CanvasSize = UDim2.new(),
+
+					create("UIListLayout")({
+						Padding = UDim.new(0, 12),
+						HorizontalAlignment = "Left",
+						SortOrder = "LayoutOrder",
+					}),
+
+					indexes(function()
+						return tab().children()
+					end, function(child)
+						return child().node
+					end),
 				}),
-
-				indexes(tab().children, function(child)
-					return child().node
-				end),
-
-				indexes(function()
-					return tab().children()
-				end, function(child)
-					return child().node
-				end),
 			})
 		end),
 	})
