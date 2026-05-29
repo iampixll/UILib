@@ -17,10 +17,16 @@ if toggle then
 		local farm = window:CreateTab("Farming", 15637359494)
 		local shop = window:CreateTab("Shop", 15637380284)
 
+		home:CreateLabel("Label text")
+
 		home:CreateButton({
 			Name = "Auto Farm",
 			Callback = function() end,
 		})
+
+		home:CreateDivider("Div")
+
+		home:CreateLabel("Label text2")
 
 		home:CreateButton({
 			Name = "Claim Rewards",
