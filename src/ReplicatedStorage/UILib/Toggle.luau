@@ -1,20 +1,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local vide = require(ReplicatedStorage.Packages.vide)
+local Colors = require(ReplicatedStorage.UILib.Colors)
 local create = vide.create
 local source = vide.source
 local spring = vide.spring
-
-local colors = {
-	background = Color3.fromRGB(43, 45, 49),
-	surface = Color3.fromRGB(30, 31, 34),
-	surfaceHigh = Color3.fromRGB(57, 60, 66),
-	accent = Color3.fromRGB(88, 101, 242),
-	buttonIdle = Color3.fromRGB(75, 78, 85),
-	buttonHover = Color3.fromRGB(95, 98, 106),
-	textPrimary = Color3.fromRGB(220, 223, 228),
-	textMuted = Color3.fromRGB(150, 153, 160),
-	tabInactive = Color3.fromRGB(110, 113, 120),
-}
 
 -- thumb positions inside the track (scale, so it scales with the track)
 local THUMB_OFF = UDim2.fromScale(0.28, 0.5)
@@ -32,11 +21,11 @@ function Toggle.new(name, currentValue, flag, callback)
 
 	local hovered = source(false)
 	local bgColor = spring(function()
-		return if hovered() then colors.buttonHover else colors.surfaceHigh
+		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
 	end, 0.3)
 
 	local trackColor = spring(function()
-		return if on() then colors.accent else colors.buttonIdle
+		return if on() then Colors.accent else Colors.buttonIdle
 	end, 0.3)
 
 	local thumbPos = spring(function()
@@ -56,7 +45,7 @@ function Toggle.new(name, currentValue, flag, callback)
 			BackgroundTransparency = 1,
 
 			Text = name,
-			TextColor3 = colors.textPrimary,
+			TextColor3 = Colors.textPrimary,
 			TextSize = 22,
 			TextXAlignment = "Left",
 			FontFace = Font.fromName("Montserrat"),
@@ -75,7 +64,7 @@ function Toggle.new(name, currentValue, flag, callback)
 				SizeConstraint = "RelativeYY", -- square, based on track height
 				AnchorPoint = Vector2.new(0.5, 0.5),
 				Position = thumbPos,
-				BackgroundColor3 = colors.textPrimary,
+				BackgroundColor3 = Colors.textPrimary,
 
 				create("UICorner")({ CornerRadius = UDim.new(1, 0) }), -- round
 			}),

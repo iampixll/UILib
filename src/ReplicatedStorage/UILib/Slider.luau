@@ -1,0 +1,3 @@
+local Slider = {}
+
+return Slider

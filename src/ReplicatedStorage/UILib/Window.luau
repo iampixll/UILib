@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local vide = require(ReplicatedStorage.Packages.vide)
+local Colors = require(ReplicatedStorage.UILib.Colors)
 local Tab = require(ReplicatedStorage.UILib.Tab)
 
 local camera = workspace.CurrentCamera
@@ -17,18 +18,6 @@ local indexes = vide.indexes
 
 local OPENED_POSITION = UDim2.new(0.5, 0, 0.5, 0)
 local CLOSED_POSITION = UDim2.new(0.5, 0, 1.5, 0)
-
-local colors = {
-	background = Color3.fromRGB(43, 45, 49), -- darkest, content areas
-	surface = Color3.fromRGB(30, 31, 34), -- main container
-	surfaceHigh = Color3.fromRGB(57, 60, 66), -- chrome (topbar, footer, buttons)
-	accent = Color3.fromRGB(88, 101, 242), -- highlights (active tab, etc.)
-	buttonIdle = Color3.fromRGB(75, 78, 85), -- minimize button, brighter than topbar
-	buttonHover = Color3.fromRGB(95, 98, 106), -- even brighter on hover
-	textPrimary = Color3.fromRGB(220, 223, 228),
-	textMuted = Color3.fromRGB(150, 153, 160),
-	tabInactive = Color3.fromRGB(110, 113, 120), -- dimmer than textMuted, for inactive tab text/icons
-}
 
 local Window = {}
 Window.__index = Window
@@ -92,7 +81,7 @@ end
 local function createTopbar(props)
 	return create("Frame")({
 		Size = UDim2.fromScale(1, 0.1),
-		BackgroundColor3 = colors.surfaceHigh,
+		BackgroundColor3 = Colors.surfaceHigh,
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -100,7 +89,7 @@ local function createTopbar(props)
 			Size = UDim2.new(1, 0, 0, 12), -- height = corner radius
 			AnchorPoint = Vector2.new(0.5, 1),
 			Position = UDim2.fromScale(0.5, 1),
-			BackgroundColor3 = colors.surfaceHigh,
+			BackgroundColor3 = Colors.surfaceHigh,
 			BorderSizePixel = 0,
 		}),
 
@@ -112,7 +101,7 @@ local function createTopbar(props)
 
 			Text = props.title,
 			TextSize = 38,
-			TextColor3 = colors.textPrimary,
+			TextColor3 = Colors.textPrimary,
 			TextXAlignment = "Left",
 			FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold),
 		}),
@@ -121,10 +110,10 @@ local function createTopbar(props)
 			Size = UDim2.fromOffset(35, 35),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.fromScale(0.98, 0.5),
-			BackgroundColor3 = colors.buttonIdle,
+			BackgroundColor3 = Colors.buttonIdle,
 
 			Image = "rbxassetid://71627683074088",
-			ImageColor3 = colors.textPrimary,
+			ImageColor3 = Colors.textPrimary,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
 
@@ -141,7 +130,7 @@ local function createFooter(props)
 		Size = UDim2.fromScale(1, 0.1),
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.fromScale(0, 1),
-		BackgroundColor3 = colors.surfaceHigh,
+		BackgroundColor3 = Colors.surfaceHigh,
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -149,7 +138,7 @@ local function createFooter(props)
 			Size = UDim2.new(1, 0, 0, 12), -- height = corner radius
 			AnchorPoint = Vector2.new(0.5, 0),
 			Position = UDim2.fromScale(0.5, 0),
-			BackgroundColor3 = colors.surfaceHigh,
+			BackgroundColor3 = Colors.surfaceHigh,
 			BorderSizePixel = 0,
 		}),
 
@@ -157,7 +146,7 @@ local function createFooter(props)
 			Size = UDim2.fromOffset(35, 35),
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.fromScale(0.02, 0.5),
-			BackgroundColor3 = colors.surface,
+			BackgroundColor3 = Colors.surface,
 
 			create("UICorner")({ CornerRadius = UDim.new(1, 0) }),
 
@@ -181,7 +170,7 @@ local function createFooter(props)
 
 			Text = "Welcome " .. props.playerName .. "!",
 			TextSize = 28,
-			TextColor3 = colors.textMuted,
+			TextColor3 = Colors.textMuted,
 			TextXAlignment = "Left",
 			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 		}),
@@ -197,7 +186,7 @@ local function createTopButton(props)
 		Size = UDim2.fromScale(0.075, 0.0375),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = props.position,
-		BackgroundColor3 = colors.surfaceHigh,
+		BackgroundColor3 = Colors.surfaceHigh,
 
 		create("UICorner")({
 			CornerRadius = UDim.new(0, 12),
@@ -213,7 +202,7 @@ local function createTopButton(props)
 				return if props.minimized() then "Open" else "Close"
 			end,
 
-			TextColor3 = colors.textPrimary,
+			TextColor3 = Colors.textPrimary,
 			TextSize = 34,
 			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
 		}),
@@ -242,7 +231,7 @@ local function createTopButton(props)
 			BackgroundTransparency = 1,
 
 			Image = "rbxassetid://126141499544212",
-			ImageColor3 = colors.textMuted,
+			ImageColor3 = Colors.textMuted,
 			ImageTransparency = iconTransparency,
 
 			Visible = function()
@@ -257,7 +246,7 @@ local function createTabList(props)
 		Size = UDim2.fromScale(0.225, 0.75),
 		AnchorPoint = Vector2.new(0, 0.5),
 		Position = UDim2.fromScale(0.015, 0.5),
-		BackgroundColor3 = colors.background,
+		BackgroundColor3 = Colors.background,
 
 		create("ScrollingFrame")({
 			Size = UDim2.fromScale(0.925, 0.95),
@@ -267,7 +256,7 @@ local function createTabList(props)
 			ScrollBarThickness = 4,
 			VerticalScrollBarPosition = "Left",
 
-			ScrollBarImageColor3 = colors.textMuted,
+			ScrollBarImageColor3 = Colors.textMuted,
 			AutomaticCanvasSize = "Y",
 			CanvasSize = UDim2.new(),
 
@@ -284,20 +273,20 @@ local function createTabList(props)
 
 				local function targetBgColor()
 					if props.activeTab() == tab() then
-						return colors.surfaceHigh
+						return Colors.surfaceHigh
 					elseif hovered() then
-						return colors.surfaceHigh
+						return Colors.surfaceHigh
 					else
-						return colors.background
+						return Colors.background
 					end
 				end
 				local bgColor = spring(targetBgColor, 0.3)
 
 				local function targetTextColor()
 					if props.activeTab() == tab() then
-						return colors.textPrimary
+						return Colors.textPrimary
 					else
-						return colors.tabInactive
+						return Colors.tabInactive
 					end
 				end
 				local textColor = spring(targetTextColor, 0.3)
@@ -375,7 +364,7 @@ local function createCurrentTab(props)
 		Size = UDim2.fromScale(0.73, 0.75),
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.fromScale(0.985, 0.5),
-		BackgroundColor3 = colors.background,
+		BackgroundColor3 = Colors.background,
 
 		create("UICorner")({
 			CornerRadius = UDim.new(0, 12),
@@ -395,7 +384,7 @@ local function createCurrentTab(props)
 					Position = UDim2.fromScale(0.5, 0.5),
 					BackgroundTransparency = 1,
 					ScrollBarThickness = 4,
-					ScrollBarImageColor3 = colors.textMuted,
+					ScrollBarImageColor3 = Colors.textMuted,
 					AutomaticCanvasSize = "Y",
 					CanvasSize = UDim2.new(),
 
@@ -463,7 +452,7 @@ function Window.new(config)
 			Size = UDim2.fromOffset(960, 600),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = displayPos,
-			BackgroundColor3 = colors.surface,
+			BackgroundColor3 = Colors.surface,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
