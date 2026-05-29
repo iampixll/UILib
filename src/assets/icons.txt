@@ -29,5 +29,3 @@ other:
 Lock: 126141499544212
 Fingerprint: 16089599792
 Dropdown: 16093555964
-
-Avatar: rbxthumb://type=AvatarHeadShot&id=4193687581&w=420&h=420

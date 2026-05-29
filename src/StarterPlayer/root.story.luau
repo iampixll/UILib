@@ -13,9 +13,22 @@ if toggle then
 	}, function(props)
 		local window = Window.new({ Title = "PixlLib" })
 
-		window:CreateTab("Home", 15637376279)
-		window:CreateTab("Farming", 15637359494)
-		window:CreateTab("Shop", 15637380284)
+		local home = window:CreateTab("Home", 15637376279)
+		local farm = window:CreateTab("Farming", 15637359494)
+		local shop = window:CreateTab("Shop", 15637380284)
+
+		home:CreateButton({
+			Name = "TestButton",
+			Callback = function() end,
+		})
+
+		local button
+		button = home:CreateButton({
+			Name = "click me",
+			Callback = function()
+				button:Set("Clicked!")
+			end,
+		})
 
 		return window.node
 	end)

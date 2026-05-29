@@ -237,7 +237,6 @@ local function createTopButton(props)
 end
 
 local function createTabList(props)
-	-- props.tabs, props.activeTab, props.onSelect
 	return create("Frame")({ -- tablist
 		Size = UDim2.fromScale(0.225, 0.75),
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -374,6 +373,22 @@ local function createCurrentTab(props)
 				Visible = function()
 					return props.activeTab() == tab()
 				end,
+
+				create("UIListLayout")({
+					Padding = UDim.new(0, 12),
+					HorizontalAlignment = "Center",
+					SortOrder = "LayoutOrder",
+				}),
+
+				indexes(tab().children, function(child)
+					return child().node
+				end),
+
+				indexes(function()
+					return tab().children()
+				end, function(child)
+					return child().node
+				end),
 			})
 		end),
 	})
