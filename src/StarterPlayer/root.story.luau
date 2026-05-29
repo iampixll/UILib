@@ -14,34 +14,52 @@ if toggle then
 		local window = Window.new({ Title = "PixlLib" })
 
 		local home = window:CreateTab("Home", 15637376279)
-		local farm = window:CreateTab("Farming", 15637359494)
-		local shop = window:CreateTab("Shop", 15637380284)
 
 		home:CreateLabel("Label text")
 
-		local paragraph = home:CreateParagraph({
-			Title = "Hello",
-			Content = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et",
+		home:CreateParagraph({
+			Title = "yo gurt",
+			Content = "gurt: yo",
 		})
 
 		home:CreateButton({
 			Name = "Auto Farm",
-			Callback = function() end,
+			Callback = function()
+				print("clicked")
+			end,
 		})
 
-		home:CreateDivider("Div")
+		home:CreateDivider("Divider")
 
 		local label2 = home:CreateLabel("Label text2")
-
-		home:CreateButton({
-			Name = "Claim Rewards",
-			Callback = function() end,
-		})
 
 		home:CreateButton({
 			Name = "Change Label 2 name",
 			Callback = function()
 				label2:Set("new name")
+			end,
+		})
+
+		home:CreateDivider("Divider")
+
+		local toggle = home:CreateToggle({
+			Name = "Toggle",
+			CurrentValue = false,
+			Flag = "Toggle1",
+			Callback = function(value) end,
+		})
+
+		home:CreateButton({
+			Name = "turn toggle off",
+			Callback = function()
+				toggle:Set(false)
+			end,
+		})
+		home:CreateButton({
+			Name = "get toggle state",
+			Callback = function()
+				local state = toggle:Get()
+				print(state)
 			end,
 		})
 

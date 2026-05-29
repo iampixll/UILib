@@ -5,6 +5,7 @@ local Button = require(ReplicatedStorage.UILib.Button)
 local Divider = require(ReplicatedStorage.UILib.Divider)
 local Label = require(ReplicatedStorage.UILib.Label)
 local Paragraph = require(ReplicatedStorage.UILib.Paragraph)
+local Toggle = require(ReplicatedStorage.UILib.Toggle)
 
 local source = vide.source
 
@@ -55,6 +56,16 @@ function Tab.new(name, image)
 		self.children(new)
 
 		return paragraph
+	end
+
+	function tab:CreateToggle(config)
+		local toggle = Toggle.new(config.Name, config.CurrentValue, config.Flag, config.Callback)
+
+		local new = table.clone(self.children())
+		table.insert(new, toggle)
+		self.children(new)
+
+		return toggle
 	end
 
 	return tab

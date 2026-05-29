@@ -32,6 +32,8 @@ function Label.new(name)
 		TextColor3 = colors.textPrimary,
 		TextSize = 24,
 		TextXAlignment = "Left",
+		TextYAlignment = "Bottom",
+
 		FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
 	})
 

@@ -22,6 +22,7 @@ Eine Rayfield-artige UI-Bibliothek, entwickelt mit **vide** und modular in **Roj
 * **Klick-Handling**: Toggle über `MouseButton1Click` (filtert "außerhalb losgelassen" automatisch weg), Dragging/Lock separat über `InputBegan`/`InputEnded`.
 * **Element-System (Grundmuster)**: Die komplette Pipeline steht und ist am Button durchgezogen — Modul `Button.new` ➔ Handle mit `.node` ➔ einhängen in `tab.children` (klonen/einfügen/zurückschreiben) ➔ Rendern via verschachteltes `indexes` im Content-Frame (`child().node`), nur im aktiven Tab.
 * **Button-Element**: `tab:CreateButton({ Name, Callback })` fertig. Optik (Background, UICorner, TextLabel links, Icon-`ImageLabel` rechts), Hover-Background über `source` + `spring`, Klick über `Activated`, sowie `:Set(name)` über eine reaktive Namens-`source`. `:Set` feuert bewusst NICHT den Callback (siehe CONCEPT, wegen Config-Laden). Self-Reference im Callback funktioniert über Closures.
+* **Toggle-Element**: `tab:CreateToggle({ Name, CurrentValue, Flag, Callback })` fertig. Optik via Switch (Track als Pille, runder Thumb), `trackColor` und `thumbPos` über `spring` animiert (idle↔accent, links↔rechts). State als `source(currentValue)`. Etabliert das State-Grundmuster: `:Get` liest den Bool, `:Set(value)` setzt still (Optik zieht über Springs nach, KEIN Callback), Callback feuert nur beim Klick und bekommt den neuen Wert. `Flag` liegt am Handle (`toggle.flag`) bereit fürs Config-System.
 ---
 ## 🐛 Offene Bugs
 * *(keine offenen Bugs)*
@@ -34,8 +35,8 @@ Eine Rayfield-artige UI-Bibliothek, entwickelt mit **vide** und modular in **Roj
 ### Element-System (Module)
 * [x] **Modul-Architektur für Elemente** etabliert (Muster steht, siehe oben).
 * [ ] **Weitere Elemente** sukzessive nach demselben Muster:
-  * **Toggle** als Nächstes — erstes Element mit echtem State (`source(false)`). Führt `:Get`, `Flag` (fürs Config-System) und die Callback-bei-Klick-aber-nicht-bei-Set-Regel praktisch ein.
-  * Danach Slider, Dropdown etc. (vgl. CONCEPT.md).
+  * **Slider** als Nächstes — erstes Element mit numerischem State (`source(number)`, min/max). Überträgt das Toggle-Muster (`:Get`/`:Set`/`Flag`/Callback) auf einen Zahlenwert plus Drag-Handling.
+  * Danach Dropdown etc. (vgl. CONCEPT.md).
 * [ ] **colors auslagern**: Farben sind aktuell in Window.luau UND Button.luau dupliziert. Bei Gelegenheit in ein eigenes Modul ziehen, das beide requiren (offen gelassen, um nicht vorzeitig zu überengineeren).
 * [ ] **Datenschicht**: Trennung von Daten und Design erst dann final entscheiden, wenn sich im Verlauf der Entwicklung ein konkreter Bedarf abzeichnet (nicht überstürzt im Vorfeld).
 ### Einschränkungen & Deployment

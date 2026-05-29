@@ -25,18 +25,27 @@ function Paragraph.new(title, content)
 	title = source(title)
 
 	paragrapgh.node = create("Frame")({
-
-		--TODO: make content & frame auto resize/format
-
-		Size = UDim2.new(0.98, 0, 0, 150),
+		Size = UDim2.new(0.98, 0, 0, 0),
 		BackgroundColor3 = colors.surfaceHigh,
+		AutomaticSize = "Y",
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
+		create("UIPadding")({ -- inner spacing from the frame edges
+			PaddingTop = UDim.new(0, 12),
+			PaddingBottom = UDim.new(0, 12),
+			PaddingLeft = UDim.new(0, 16),
+			PaddingRight = UDim.new(0, 16),
+		}),
+
+		create("UIListLayout")({ -- stacks children, frame sums their height
+			Padding = UDim.new(0, 8),
+			SortOrder = "LayoutOrder",
+		}),
+
 		create("TextLabel")({ -- title
-			Size = UDim2.new(0.95, 0, 0, 38),
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0),
+			Size = UDim2.new(1, 0, 0, 28),
+			LayoutOrder = 1,
 			BackgroundTransparency = 1,
 
 			Text = title,
@@ -47,12 +56,13 @@ function Paragraph.new(title, content)
 		}),
 
 		create("TextLabel")({ -- content
-			Size = UDim2.new(0.925, 0, 0, 100),
-			AnchorPoint = Vector2.new(0, 0),
-			Position = UDim2.fromScale(0.05, 0.25),
-			BackgroundTransparency = 0.9,
+			Size = UDim2.new(1, 0, 0, 0), -- X fixed, Y grows with text
+			LayoutOrder = 2,
+			AutomaticSize = "Y",
+			BackgroundTransparency = 1,
 
 			Text = content,
+			TextWrapped = true,
 			TextColor3 = colors.textPrimary,
 			TextSize = 22,
 			TextXAlignment = "Left",
