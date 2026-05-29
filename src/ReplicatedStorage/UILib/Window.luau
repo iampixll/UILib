@@ -96,6 +96,14 @@ local function createTopbar(props)
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
+		create("Frame")({ -- covers bottom corners, keeps them square
+			Size = UDim2.new(1, 0, 0, 12), -- height = corner radius
+			AnchorPoint = Vector2.new(0.5, 1),
+			Position = UDim2.fromScale(0.5, 1),
+			BackgroundColor3 = colors.surfaceHigh,
+			BorderSizePixel = 0,
+		}),
+
 		create("TextLabel")({
 			Size = UDim2.fromScale(0.5, 0.7),
 			AnchorPoint = Vector2.new(0, 0.5),
@@ -136,6 +144,14 @@ local function createFooter(props)
 		BackgroundColor3 = colors.surfaceHigh,
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+		create("Frame")({ -- covers bottom corners, keeps them square
+			Size = UDim2.new(1, 0, 0, 12), -- height = corner radius
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.fromScale(0.5, 0),
+			BackgroundColor3 = colors.surfaceHigh,
+			BorderSizePixel = 0,
+		}),
 
 		create("Frame")({
 			Size = UDim2.fromOffset(35, 35),
