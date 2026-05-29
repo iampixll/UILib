@@ -1,6 +1,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
 local vide = require(ReplicatedStorage.Packages.vide)
 local Colors = require(ReplicatedStorage.UILib.Colors)
+
 local create = vide.create
 local source = vide.source
 local spring = vide.spring
@@ -81,7 +83,7 @@ function Toggle.new(name, currentValue, flag, callback)
 				hovered(false)
 			end,
 
-			Activated = function() -- click flips the state (Set/Get logic comes next)
+			Activated = function()
 				on(not on())
 				if callback then
 					callback(on())

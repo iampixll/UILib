@@ -5,6 +5,7 @@ local Button = require(ReplicatedStorage.UILib.Button)
 local Divider = require(ReplicatedStorage.UILib.Divider)
 local Label = require(ReplicatedStorage.UILib.Label)
 local Paragraph = require(ReplicatedStorage.UILib.Paragraph)
+local Slider = require(ReplicatedStorage.UILib.Slider)
 local Toggle = require(ReplicatedStorage.UILib.Toggle)
 
 local source = vide.source
@@ -66,6 +67,16 @@ function Tab.new(name, image)
 		self.children(new)
 
 		return toggle
+	end
+
+	function tab:CreateSlider(config)
+		local slider = Slider.new(config.Name, config.Suffix, config.Range, config.Increment, config.CurrentValue, config.Flag, config.Callback)
+
+		local new = table.clone(self.children())
+		table.insert(new, slider)
+		self.children(new)
+
+		return slider
 	end
 
 	return tab

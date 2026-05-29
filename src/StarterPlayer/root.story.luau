@@ -15,6 +15,16 @@ if toggle then
 
 		local home = window:CreateTab("Home", 15637376279)
 
+		local slider = home:CreateSlider({
+			Name = "Slider Example",
+			Suffix = "Coins",
+			Range = { 0, 10000 },
+			Increment = 10,
+			CurrentValue = 2000,
+			Flag = "Slider1",
+			Callback = function(Value) end,
+		})
+
 		home:CreateLabel("Label text")
 
 		home:CreateParagraph({
