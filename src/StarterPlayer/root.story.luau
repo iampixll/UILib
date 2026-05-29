@@ -15,6 +15,8 @@ if toggle then
 
 		local home = window:CreateTab("Home", 15637376279)
 
+		home:CreateLabel("Farm Eggs")
+
 		local slider = home:CreateSlider({
 			Name = "Slider Example",
 			Suffix = "Coins",

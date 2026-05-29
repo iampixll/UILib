@@ -27,8 +27,8 @@ function InputBox.new(name, inputType, currentValue, placeholder, flag, callback
 		return if focused() then Colors.surfaceHigh else Colors.background
 	end, 0.3)
 
-	local strokeTransparency = spring(function() -- accent border, only while focused
-		return if focused() then 0 else 1
+	local strokeColor = spring(function() -- accent border, only while focused
+		return if focused() then Colors.accent else Colors.tabInactive
 	end, 0.3)
 
 	local textColor = spring(function() -- bright while focused, fades grey on blur
@@ -93,7 +93,7 @@ function InputBox.new(name, inputType, currentValue, placeholder, flag, callback
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
-		create("TextLabel")({ -- name on the left
+		create("TextLabel")({ -- name
 			Size = UDim2.new(0.45, -16, 0.6, 0),
 			AnchorPoint = Vector2.new(0, 0.5),
 			Position = UDim2.new(0, 16, 0.5, 0),
@@ -106,7 +106,7 @@ function InputBox.new(name, inputType, currentValue, placeholder, flag, callback
 			FontFace = Font.fromName("Montserrat"),
 		}),
 
-		create("Frame")({ -- input field background on the right
+		create("Frame")({ -- input field background
 			Size = UDim2.new(0.42, 0, 0.6, 0),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -16, 0.5, 0),
@@ -114,10 +114,9 @@ function InputBox.new(name, inputType, currentValue, placeholder, flag, callback
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
 
-			create("UIStroke")({ -- accent highlight while focused
-				Color = Colors.accent,
-				Thickness = 2,
-				Transparency = strokeTransparency,
+			create("UIStroke")({
+				Color = strokeColor,
+				Thickness = 1.5,
 			}),
 
 			create("UIPadding")({

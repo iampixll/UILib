@@ -61,6 +61,11 @@ function Toggle.new(name, currentValue, flag, callback)
 
 			create("UICorner")({ CornerRadius = UDim.new(1, 0) }), -- pill
 
+			create("UIStroke")({
+				Color = Colors.tabInactive,
+				Thickness = 1.5,
+			}),
+
 			create("Frame")({ -- thumb
 				Size = UDim2.fromScale(0.78, 0.78),
 				SizeConstraint = "RelativeYY", -- square, based on track height

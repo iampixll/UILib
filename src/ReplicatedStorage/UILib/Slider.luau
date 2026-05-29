@@ -51,13 +51,13 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 		return if dragging() then 1.2 else 1
 	end, 0.2)
 
-	local fillFraction = spring(fraction, 0.15) -- springs the 0..1 fraction; small period = little lag
+	local fillFraction = spring(fraction, 0.15)
 
 	track = create("Frame")({ -- track
 		Size = UDim2.new(0.95, 0, 0, 12),
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -10),
-		BackgroundColor3 = Colors.surface,
+		BackgroundColor3 = Colors.background,
 
 		create("UICorner")({ CornerRadius = UDim.new(1, 0) }),
 
