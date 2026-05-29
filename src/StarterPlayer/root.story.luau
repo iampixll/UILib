@@ -2,7 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local uilabs = require(ReplicatedStorage.Packages.uilabs)
 local vide = require(ReplicatedStorage.Packages.vide)
-local Window = require(ReplicatedStorage.UILib.Window)
+local WindowNEW = require(ReplicatedStorage.UILib.WindowNEW)
 
 local toggle = true
 
@@ -11,16 +11,12 @@ if toggle then
 		vide = vide,
 		controls = {},
 	}, function(props)
-		local node, api = Window({
-			Title = "PixlLib",
-		})
+		local window = WindowNEW.new({ Title = "PixlLib" })
 
-		api.createTab("Home", 15637376279)
-		api.createTab("Webhook", 122219359034661)
-		api.createTab("Shop", 15637380284)
-		api.createTab("Farm", 15637359494)
-		api.createTab("Egg", 15637367451)
+		window:CreateTab("Home", 15637376279)
+		window:CreateTab("Farming", 15637359494)
+		window:CreateTab("Shop", 15637380284)
 
-		return node
+		return window.node
 	end)
 end
