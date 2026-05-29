@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local vide = require(ReplicatedStorage.Packages.vide)
 local Button = require(ReplicatedStorage.UILib.Button)
 local Divider = require(ReplicatedStorage.UILib.Divider)
+local InputBox = require(ReplicatedStorage.UILib.InputBox)
 local Label = require(ReplicatedStorage.UILib.Label)
 local Paragraph = require(ReplicatedStorage.UILib.Paragraph)
 local Slider = require(ReplicatedStorage.UILib.Slider)
@@ -49,6 +50,10 @@ function Tab.new(name, image)
 
 	function tab:CreateSlider(config)
 		return addChild(self, Slider.new(config.Name, config.Suffix, config.Range, config.Increment, config.CurrentValue, config.Flag, config.Callback))
+	end
+
+	function tab:CreateInput(config)
+		return addChild(self, InputBox.new(config.Name, config.InputType, config.CurrentValue, config.Placeholder, config.Flag, config.Callback))
 	end
 
 	return tab

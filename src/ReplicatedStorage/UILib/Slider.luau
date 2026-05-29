@@ -34,16 +34,21 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 	end
 
 	local dragging = source(false)
+	local hovered = source(false)
+
+	local bgColor = spring(function()
+		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
+	end, 0.3)
 
 	local track
 
 	local function updateFromX(mouseX)
-		local fraction = (mouseX - track.AbsolutePosition.X) / track.AbsoluteSize.X
-		setValue(min + fraction * (max - min), true)
+		local f = (mouseX - track.AbsolutePosition.X) / track.AbsoluteSize.X
+		setValue(min + f * (max - min), true)
 	end
 
 	local thumbScale = spring(function()
-		return if dragging() then 1.2 else 1 -- or tie to a hovered source
+		return if dragging() then 1.2 else 1
 	end, 0.2)
 
 	local fillFraction = spring(fraction, 0.15) -- springs the 0..1 fraction; small period = little lag
@@ -78,18 +83,6 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 
 			create("UICorner")({ CornerRadius = UDim.new(1, 0) }),
 		}),
-
-		create("TextButton")({ -- catches clicks/drag start over the whole track
-			Size = UDim2.fromScale(1, 1),
-			BackgroundTransparency = 1,
-			Text = "",
-			InputBegan = function(input)
-				if input.UserInputType == Enum.UserInputType.MouseButton1 then
-					dragging(true)
-					updateFromX(input.Position.X)
-				end
-			end,
-		}),
 	})
 
 	local moveConn = UserInputService.InputChanged:Connect(function(input)
@@ -108,7 +101,7 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 
 	slider.node = create("Frame")({
 		Size = UDim2.new(0.98, 0, 0, 60),
-		BackgroundColor3 = Colors.surfaceHigh,
+		BackgroundColor3 = bgColor,
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -140,6 +133,26 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 		}),
 
 		track,
+
+		create("TextButton")({ -- full-element overlay: hover + drag start anywhere
+			Size = UDim2.fromScale(1, 1),
+			BackgroundTransparency = 1,
+			Text = "",
+
+			MouseEnter = function()
+				hovered(true)
+			end,
+			MouseLeave = function()
+				hovered(false)
+			end,
+
+			InputBegan = function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+					dragging(true)
+					updateFromX(input.Position.X)
+				end
+			end,
+		}),
 	})
 
 	function slider:Get()

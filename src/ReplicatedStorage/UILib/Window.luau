@@ -192,6 +192,12 @@ local function createTopButton(props)
 			CornerRadius = UDim.new(0, 12),
 		}),
 
+		create("UIStroke")({ -- subtle outer border
+			Color = Colors.surface,
+			Thickness = 4,
+			Transparency = 0.7,
+		}),
+
 		create("TextLabel")({
 			Size = UDim2.fromScale(0.9, 0.8),
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -455,6 +461,12 @@ function Window.new(config)
 			BackgroundColor3 = Colors.surface,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+			create("UIStroke")({ -- subtle outer border
+				Color = Colors.surface,
+				Thickness = 4,
+				Transparency = 0.7,
+			}),
 
 			createTopbar({
 				title = config.Title,

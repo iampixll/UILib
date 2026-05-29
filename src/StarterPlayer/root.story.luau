@@ -24,6 +24,16 @@ if toggle then
 			Flag = "Slider1",
 			Callback = function(Value) end,
 		})
+		home:CreateInput({
+			Name = "Input",
+			InputType = "number", -- number/text
+			CurrentValue = 0,
+			Placeholder = "Enter amount",
+			Flag = "Input1",
+			Callback = function(amount)
+				slider:Set(amount)
+			end,
+		})
 
 		home:CreateButton({
 			Name = "Get Current Value",
