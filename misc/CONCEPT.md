@@ -50,8 +50,14 @@ Title ist die Ausnahme (transparent).
 - Set/Get pro Element — jedes Create*-Objekt gibt Methoden zurück, um seinen Wert
   von außen zu setzen/lesen (z.B. toggle:Set(true), slider:Get()).
   Voraussetzung fürs Config-Laden.
+  Wichtig: Set/Get ist die AUSSEN-Schnittstelle (Code/Config steuert das Element
+  ohne Klick). Interne Reaktivität — z.B. der angezeigte Dropdown-Text, der auf
+  die Auswahl reagiert — läuft über sources/derive im Element selbst und braucht
+  KEIN Set. Nicht verwechseln.
 - Flag/Key pro Element — eindeutiger Name, unter dem der Wert gespeichert wird.
   Bindeglied zwischen Element und Config-System (vgl. Rayfields Flag).
+  Nur Elemente mit speicherbarem Wert haben einen Flag (Toggle, Slider, Dropdown…).
+  Button, Title, Divider haben keinen — es gibt nichts zu speichern.
 - LayoutOrder — wer vergibt die Reihenfolge der Elemente im Content?
   Offene Frage der Datenschicht; UIListLayout sortiert nach LayoutOrder.
 

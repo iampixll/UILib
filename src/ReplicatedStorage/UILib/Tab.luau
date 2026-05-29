@@ -13,7 +13,7 @@ function Tab.new(name, image)
 		children = source({}),
 	}
 
-	function tab:createButton(config) end
+	function tab:CreateButton(config) end
 
 	return tab
 end
