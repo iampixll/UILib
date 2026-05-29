@@ -4,6 +4,7 @@ local vide = require(ReplicatedStorage.Packages.vide)
 local Button = require(ReplicatedStorage.UILib.Button)
 local Divider = require(ReplicatedStorage.UILib.Divider)
 local Label = require(ReplicatedStorage.UILib.Label)
+local Paragraph = require(ReplicatedStorage.UILib.Paragraph)
 
 local source = vide.source
 
@@ -44,6 +45,16 @@ function Tab.new(name, image)
 		self.children(new)
 
 		return divider
+	end
+
+	function tab:CreateParagraph(config)
+		local paragraph = Paragraph.new(config.Title, config.Content)
+
+		local new = table.clone(self.children())
+		table.insert(new, paragraph)
+		self.children(new)
+
+		return paragraph
 	end
 
 	return tab

@@ -19,6 +19,11 @@ if toggle then
 
 		home:CreateLabel("Label text")
 
+		local paragraph = home:CreateParagraph({
+			Title = "Hello",
+			Content = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et",
+		})
+
 		home:CreateButton({
 			Name = "Auto Farm",
 			Callback = function() end,
