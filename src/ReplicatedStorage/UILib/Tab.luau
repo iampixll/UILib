@@ -12,6 +12,14 @@ local source = vide.source
 
 local Tab = {}
 
+local function addChild(self, handle)
+	local new = table.clone(self.children())
+	table.insert(new, handle)
+	self.children(new)
+
+	return handle
+end
+
 function Tab.new(name, image)
 	local tab = {
 		name = name,
@@ -20,63 +28,27 @@ function Tab.new(name, image)
 	}
 
 	function tab:CreateButton(config)
-		local button = Button.new(config.Name, config.Callback)
-
-		local new = table.clone(self.children())
-		table.insert(new, button)
-		self.children(new)
-
-		return button
+		return addChild(self, Button.new(config.Name, config.Callback))
 	end
 
 	function tab:CreateLabel(name)
-		local label = Label.new(name)
-
-		local new = table.clone(self.children())
-		table.insert(new, label)
-		self.children(new)
-
-		return label
+		return addChild(self, Label.new(name))
 	end
 
 	function tab:CreateDivider(name)
-		local divider = Divider.new(name)
-
-		local new = table.clone(self.children())
-		table.insert(new, divider)
-		self.children(new)
-
-		return divider
+		return addChild(self, Divider.new(name))
 	end
 
 	function tab:CreateParagraph(config)
-		local paragraph = Paragraph.new(config.Title, config.Content)
-
-		local new = table.clone(self.children())
-		table.insert(new, paragraph)
-		self.children(new)
-
-		return paragraph
+		return addChild(self, Paragraph.new(config.Title, config.Content))
 	end
 
 	function tab:CreateToggle(config)
-		local toggle = Toggle.new(config.Name, config.CurrentValue, config.Flag, config.Callback)
-
-		local new = table.clone(self.children())
-		table.insert(new, toggle)
-		self.children(new)
-
-		return toggle
+		return addChild(self, Toggle.new(config.Name, config.CurrentValue, config.Flag, config.Callback))
 	end
 
 	function tab:CreateSlider(config)
-		local slider = Slider.new(config.Name, config.Suffix, config.Range, config.Increment, config.CurrentValue, config.Flag, config.Callback)
-
-		local new = table.clone(self.children())
-		table.insert(new, slider)
-		self.children(new)
-
-		return slider
+		return addChild(self, Slider.new(config.Name, config.Suffix, config.Range, config.Increment, config.CurrentValue, config.Flag, config.Callback))
 	end
 
 	return tab

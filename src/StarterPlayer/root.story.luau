@@ -25,6 +25,15 @@ if toggle then
 			Callback = function(Value) end,
 		})
 
+		home:CreateButton({
+			Name = "Get Current Value",
+			Callback = function()
+				print(slider:Get())
+			end,
+		})
+
+		home:CreateDivider("Divider")
+
 		home:CreateLabel("Label text")
 
 		home:CreateParagraph({
