@@ -3,7 +3,7 @@
 ## 🎯 Ziel
 Eine Rayfield-artige UI-Bibliothek, entwickelt mit **vide** und modular in **Rojo**, die am Ende als Single-File gebündelt (mit Wax oder darklua) und per `loadstring` distribuiert werden kann.
 ### Architektur & Design
-* **OOP-Stil**: Tabellenbasiertes OOP (`WindowNEW.new` ➔ `window:CreateTab` ➔ `tab:CreateButton`).
+* **OOP-Stil**: Tabellenbasiertes OOP (`Window.new` ➔ `window:CreateTab` ➔ `tab:CreateButton`).
 * **Responsiveness**: Festes Offset-Layout bei einer Referenzauflösung von 1920×1080. Ein globaler `UIScale` skaliert das gesamte UI uniform.
 * **Modulstruktur**: Das Hauptfenster (Window) liegt in einer Datei mit lokalen Hilfsfunktionen; wiederverwendbare Elemente werden als eigene Module ausgelagert.
 ---
