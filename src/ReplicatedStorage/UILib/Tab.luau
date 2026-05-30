@@ -3,6 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local vide = require(ReplicatedStorage.Packages.vide)
 local Button = require(ReplicatedStorage.UILib.Button)
 local Divider = require(ReplicatedStorage.UILib.Divider)
+local Dropdown = require(ReplicatedStorage.UILib.Dropdown)
 local InputBox = require(ReplicatedStorage.UILib.InputBox)
 local Label = require(ReplicatedStorage.UILib.Label)
 local Paragraph = require(ReplicatedStorage.UILib.Paragraph)
@@ -54,6 +55,10 @@ function Tab.new(name, image)
 
 	function tab:CreateInput(config)
 		return addChild(self, InputBox.new(config.Name, config.InputType, config.CurrentValue, config.Placeholder, config.Flag, config.Callback))
+	end
+
+	function tab:CreateDropdown(config)
+		return addChild(self, Dropdown.new(config.Name, config.Options))
 	end
 
 	return tab
