@@ -1,48 +1,64 @@
-# Generiert von Claude
 # Projekt-Status: Rayfield-artige UI-Bibliothek (vide & Rojo)
+
 ## 🎯 Ziel
-Eine Rayfield-artige UI-Bibliothek, entwickelt mit **vide** und modular in **Rojo**, die am Ende als Single-File gebündelt (mit Wax oder darklua) und per `loadstring` distribuiert werden kann.
+Eine Rayfield-artige UI-Bibliothek mit **vide**, modular in **Rojo**, am Ende als Single-File gebündelt (Wax oder darklua) und per `loadstring` distribuierbar.
+
 ### Architektur & Design
-* **OOP-Stil**: Tabellenbasiertes OOP (`Window.new` ➔ `window:CreateTab` ➔ `tab:CreateButton`).
-* **Responsiveness**: Festes Offset-Layout bei einer Referenzauflösung von 1920×1080. Ein globaler `UIScale` skaliert das gesamte UI uniform.
-* **Modulstruktur**: Das Hauptfenster (Window) liegt in einer Datei mit lokalen Hilfsfunktionen; wiederverwendbare Elemente werden als eigene Module ausgelagert.
-* **Element-Muster**: Jedes Element ist ein eigenes Modul mit `.new(...)`, das ein Handle zurückgibt. Das Handle trägt seine vide-Node als `.node` und seine Außen-Methoden (`:Set`/`:Get`). Logik und Design liegen zusammen im Modul.
+* **OOP-Stil**: Tabellenbasiert (`Window.new` ➔ `window:CreateTab` ➔ `tab:CreateButton`).
+* **Responsiveness**: Festes Offset-Layout bei Referenzauflösung 1920×1080, global über `UIScale` uniform skaliert.
+* **Modulstruktur**: Window in einer Datei mit lokalen Helpern; wiederverwendbare Elemente als eigene Module.
+* **Element-Muster**: Jedes Element ist ein Modul mit `.new(...)`, gibt ein Handle zurück. Handle trägt seine vide-Node als `.node` und seine Außen-Methoden (`:Set`/`:Get`). Logik und Design liegen zusammen im Modul.
+* **State-Regel** (durchgängig): `:Set` setzt still ohne Callback, der Callback feuert nur bei echter Nutzer-Interaktion. Gilt für Toggle, Slider, InputBox — und soll für Dropdown genauso gelten.
+
 ---
+
 ## ✅ Fertiggestellt & Funktionierend
-* **Fundament**: `ScreenGui` und ein reaktiver `UIScale`, der dynamisch an der `ViewportSize` hängt.
-* **Topbar & Footer**: Topbar mit Titel und Minimize-Button. Footer mit dynamischem Spielernamen und Avatar-Headshot (via `rbxthumb`), abgesichert gegen `nil`-Player (Fallback für UI Labs).
-* **Minimize-Logik**: Animation über `spring`. Ein immer sichtbarer Top-Button dient zum Öffnen und Schließen (Text wechselt dynamisch zwischen "Open" und "Close").
-* **Tabs**:
-  * `tabs` und `activeTab` sind als reactive Sources auf `self` hinterlegt.
-  * Methode `CreateTab` implementiert.
-  * Dynamisches Rendern der Tab-Leiste und des Content-Bereichs via `indexes`.
-  * Visuelle Hervorhebung des aktiven Tabs.
-* **Dragging**: Dragging-Funktionalität für das Mainframe und den Top-Button (inklusive Scale-Korrektur). Bei der Initialisierung bzw. beim Öffnen setzt `windowPos` das UI in die Bildschirmmitte zurück.
-* **Top-Button Features**: Rechtsklick-Sperre (Lock) für den Top-Button inklusive Lock-Icon, das via `spring` auf `ImageTransparency` weich ein-/ausblendet.
-* **Klick-Handling**: Toggle über `MouseButton1Click` (filtert "außerhalb losgelassen" automatisch weg), Dragging/Lock separat über `InputBegan`/`InputEnded`.
-* **Element-System (Grundmuster)**: Die komplette Pipeline steht und ist am Button durchgezogen — Modul `Button.new` ➔ Handle mit `.node` ➔ einhängen in `tab.children` (klonen/einfügen/zurückschreiben) ➔ Rendern via verschachteltes `indexes` im Content-Frame (`child().node`), nur im aktiven Tab.
-* **Button-Element**: `tab:CreateButton({ Name, Callback })` fertig. Optik (Background, UICorner, TextLabel links, Icon-`ImageLabel` rechts), Hover-Background über `source` + `spring`, Klick über `Activated`, sowie `:Set(name)` über eine reaktive Namens-`source`. `:Set` feuert bewusst NICHT den Callback (siehe CONCEPT, wegen Config-Laden). Self-Reference im Callback funktioniert über Closures.
-* **Toggle-Element**: `tab:CreateToggle({ Name, CurrentValue, Flag, Callback })` fertig. Optik via Switch (Track als Pille, runder Thumb), `trackColor` und `thumbPos` über `spring` animiert (idle↔accent, links↔rechts). State als `source(currentValue)`. Etabliert das State-Grundmuster: `:Get` liest den Bool, `:Set(value)` setzt still (Optik zieht über Springs nach, KEIN Callback), Callback feuert nur beim Klick und bekommt den neuen Wert. `Flag` liegt am Handle (`toggle.flag`) bereit fürs Config-System.
-* **Slider-Element**: `tab:CreateSlider({ Name, Suffix, Range, Increment, CurrentValue, Flag, Callback })` fertig. Numerischer State als `source`, Wert↔Anteil-Umrechnung in beide Richtungen über `fraction()` (Wert→Optik) und `updateFromX` (Maus→Wert). Drag wie `makeDraggable`: `InputBegan` auf transparentem TextButton über der Schiene (deckt Klick-zum-Springen UND Drag-Start ab), `InputChanged`/`InputEnded` global via UserInputService (+ `vide.cleanup`), `dragging` als `source`. Snapping (`math.round(v/increment)*increment`) + `clamp` zentral in lokaler `setValue(v, fireCallback)`. Diese Funktion löst den `:Set`-vs-Drag-Konflikt: Drag ruft `setValue(.., true)` (feuert Callback), öffentliches `:Set` ruft `setValue(.., false)` (still, konsistent zur Toggle-Regel). Callback feuert nur bei echter Wert-Änderung (`snapped ~= value()`), nicht pro Maus-Pixel. Fill + Thumb über gemeinsamen `spring(fraction)` gefedert (laufen synchron), Thumb wächst beim Ziehen via zweitem Spring.
+
+### Fundament
+* `ScreenGui` mit reaktivem `UIScale`, der an der `ViewportSize` hängt.
+* Topbar (Titel + Minimize-Button), Footer (Spielername + Avatar-Headshot via `rbxthumb`, nil-sicher als Fallback für UI Labs).
+* Minimize über `spring`; immer sichtbarer Top-Button zum Öffnen/Schließen (Text wechselt "Open"/"Close").
+* Dragging für Mainframe und Top-Button (inkl. Scale-Korrektur); beim Öffnen zentriert `windowPos` das UI.
+* Top-Button: Rechtsklick-Lock mit Lock-Icon (über `spring` auf `ImageTransparency` ein-/ausgeblendet).
+* Klick-Handling: Toggle über `MouseButton1Click`, Dragging/Lock separat über `InputBegan`/`InputEnded`.
+
+### Tabs
+* `tabs` und `activeTab` als reactive Sources auf `self`.
+* `CreateTab` fertig; Tab-Leiste und Content-Bereich dynamisch via `indexes`, aktiver Tab visuell hervorgehoben.
+
+### Element-System
+* Grundmuster steht und ist durchgezogen: Modul `X.new` ➔ Handle mit `.node` ➔ einhängen in `tab.children` (klonen/einfügen/zurückschreiben) ➔ Rendern via verschachteltes `indexes` im Content-Frame, nur im aktiven Tab.
+* **Button**: Name + Icon, Hover-Background über `source` + `spring`, Klick über `Activated`, `:Set(name)` über reaktive Namens-source.
+* **Toggle**: Switch-Optik (Track-Pille + runder Thumb), `trackColor`/`thumbPos` über `spring`. State als `source(bool)`. Etabliert das State-Grundmuster (`:Get`/`:Set` still, Callback nur beim Klick), `flag` am Handle.
+* **Slider**: Numerischer State, Wert↔Anteil über `fraction()`/`updateFromX`, Drag wie `makeDraggable` (InputBegan auf Overlay + globale UserInputService-Connections mit `cleanup`). Snapping + clamp zentral in `setValue`, das den `:Set`-vs-Drag-Konflikt löst (Drag feuert Callback, `:Set` still). Fill + Thumb über gemeinsamen Spring.
+* **InputBox**: `text`/`number`-Varianten, committed value als single source of truth (kein Cursor-Jumping), Validierung bei `number` mit Snap-back. `:Get`/`:Set`/`flag` da.
+* **Label, Divider, Paragraph**: einfache Anzeige-Elemente fertig.
+
+### Dropdown — Design fertig
+Optik und Aufbau stehen, Logik fehlt komplett (siehe unten).
+* Header mit Name links, Summary-Platzhalter rechts ("Select options"), Chevron der bei `open` umklappt; Klick-Overlay toggelt `open`.
+* Panel als `Frame > ScrollingFrame`-Hülle: äußerer Frame gibt Farbe/Ecken und clippt, ScrollingFrame sitzt mit Rand innen (Scrollbar von der Außenkante weg).
+* Gedeckelte Höhe (278px) mit Innen-Scroll, genau 4 Optionen sichtbar, fünfte sauber weggeclippt.
+* Optionszeilen via `indexes` im Element-Look (Hover-Background + Stroke, Checkbox-Optik mit Accent-Fill).
+* Hover-Highlight über das ganze Element: **eine** `bgColor`-source/Spring auf Dropdown-Ebene, von node und Panel gemeinsam gelesen (laufen synchron).
+* Erste Option exakt im 60px-Raster unter dem Header: ScrollingFrame um −6px nach oben gezogen, `PaddingTop` von 6px hebt das auf → Stroke geschützt, kein Versatz.
+
 ---
+
 ## 🐛 Offene Bugs
 * *(keine offenen Bugs)*
+
 ### Gelöst
-* **Rechtsklick toggelte das UI (nur in UI Labs)**:
-  * *Ursache*: Kein Code-Fehler — das UI-Labs-Plugin-Widget liefert bei Rechtsklick ein Phantom-`InputEnded` mit `UserInputType == MouseButton1`, das durch jeden MB1-Filter rutscht. Im echten Play-Test tritt das nicht auf.
-  * *Lehre*: Beim Debuggen am Aufrufer messen, nicht am Ziel. Bei merkwürdigem Input-Verhalten in UI Labs gegen eine echte Sitzung (F5) gegenprüfen.
+* **Rechtsklick toggelte das UI (nur in UI Labs)**: Kein Code-Fehler — das UI-Labs-Widget liefert bei Rechtsklick ein Phantom-`InputEnded` mit `MouseButton1`. Im echten Play-Test (F5) tritt das nicht auf. *Lehre*: bei merkwürdigem Input-Verhalten gegen eine echte Sitzung gegenprüfen.
+
 ---
-## 📌 Offene Aufgaben & Feature-Ideen
-### Element-System (Module)
-* [x] **Modul-Architektur für Elemente** etabliert (Muster steht, siehe oben).
-* [ ] **Weitere Elemente** sukzessive nach demselben Muster:
-  * **Dropdown** als Nächstes — dickstes Element bisher: dynamische Optionsliste (via `indexes` wie bei den Tabs), ausklappbares Panel, immer-aktive Suche, optional Multi-Select (mit Checkbox-Marker, vgl. CONCEPT). Bringt ein Layering-Problem mit (aufgeklapptes Panel muss über den Elementen darunter liegen, aber Content sitzt in ScrollingFrame mit UIListLayout → ZIndex ist darin tückisch).
-  * Danach Input. Radio/Checkbox fällt weitgehend mit dem Dropdown-Multi-Select zusammen.
-* [ ] **colors auslagern**: Farben sind aktuell in Window.luau UND Button.luau dupliziert. Bei Gelegenheit in ein eigenes Modul ziehen, das beide requiren (offen gelassen, um nicht vorzeitig zu überengineeren).
-* [ ] **Datenschicht**: Trennung von Daten und Design erst dann final entscheiden, wenn sich im Verlauf der Entwicklung ein konkreter Bedarf abzeichnet (nicht überstürzt im Vorfeld).
-### Einschränkungen & Deployment
-* [ ] **Plattformen**: Mobile- und Touch-Unterstützung sind für dieses Projekt bewusst ausgeklammert.
-* [ ] **Bundling & Release** (Ganz am Ende):
-  * Build-Prozess einrichten (Wax oder darklua).
-  * Pfade (`requires`) von `ReplicatedStorage.Packages` auf relative Pfade umstellen.
-  * Parent-Struktur (Parenting in `PlayerGui`) final überprüfen.
+
+## 📌 Offene Aufgaben
+
+### Dropdown — Logik (nächster Schwerpunkt)
+Reihenfolge bewusst von unten nach oben: erst die Datenbasis, dann was darauf aufbaut.
+
+1. [ ] **`selected`-Menge aufs Dropdown ziehen** (Fundament). Aktuell hat jede Zeile eine eigene lokale `checked`-source — läuft nirgends zusammen und wird beim Zuklappen zerstört (`indexes` liefert `{}`, Scopes werden weggeräumt → Haken weg). Stattdessen eine `selected`-source auf `Dropdown.new`-Ebene als `{ [optionName] = true }`; Zeilen leiten ihren Zustand daraus ab. Togglen übers Klon-Muster (klonen, Key setzen/löschen, zurückschreiben — nicht in-place).
+2. [ ] **Summary** im Header aus `selected` ableiten (statt festem "Select options").
+3. [ ] **Suchleiste** + **„All"-Toggle** als fixe erste Zeile im ScrollingFrame (Such-Feld rechts ~65%, All-Box links ~30%, manuell nebeneinander, kein Layout *innerhalb* der Zeile). Suche filtert die gerenderte Liste; „All" schreibt alle Namen in die Menge bzw. leert sie. Zeile ist eigenes festes Kind **neben** dem `indexes`-Block, nicht Teil davon (sonst verschwindet sie beim Zuklappen mit).
+4. [ ] **Außenschnittstelle**: `:Get`/`:Set` (still, ohne Callback) + `Callback` (nur

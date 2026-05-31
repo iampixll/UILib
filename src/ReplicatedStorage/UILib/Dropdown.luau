@@ -17,9 +17,14 @@ function Dropdown.new(name, options)
 	local optionList = source(options or {})
 	local open = source(false) -- panel expanded?
 
+	local hovered = source(false)
+	local bgColor = spring(function()
+		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
+	end, 0.3)
+
 	dropdown.node = create("Frame")({
 		Size = UDim2.new(0.98, 0, 0, 0),
-		BackgroundColor3 = Colors.surfaceHigh,
+		BackgroundColor3 = bgColor,
 		AutomaticSize = "Y",
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
@@ -78,22 +83,31 @@ function Dropdown.new(name, options)
 					open(not open())
 				end,
 			}),
+
+			MouseEnter = function()
+				hovered(true)
+			end,
+			MouseLeave = function()
+				hovered(false)
+			end,
 		}),
 
-		create("Frame")({ -- option panel container
+		create("Frame")({ -- panel hull: gives color, corners, clips; scroll frame sits inside with margin
 			Size = function()
-				return if open() then UDim2.new(1, 0, 0, 200) else UDim2.new(1, 0, 0, 0)
+				return if open() then UDim2.new(1, 0, 0, 278) else UDim2.new(1, 0, 0, 0)
 			end,
 			LayoutOrder = 2,
-			BackgroundColor3 = Colors.surfaceHigh,
-			ClipsDescendants = true, -- hide rows while collapsing
+			BackgroundColor3 = bgColor, -- same spring as node, stays in sync
+			ClipsDescendants = true,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
 			create("ScrollingFrame")({
-				Size = UDim2.fromScale(0.975, 0.95),
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
+				-- top-anchored, pulled up by 6px so PaddingTop doesn't push the first row
+				-- below the 60px grid; width < 1 keeps the scrollbar off the outer edge
+				Size = UDim2.new(0.975, 0, 1, 0),
+				AnchorPoint = Vector2.new(0.5, 0),
+				Position = UDim2.new(0.5, 0, 0, -6),
 				BackgroundTransparency = 1,
 				ScrollBarThickness = 4,
 				ScrollBarImageColor3 = Colors.textMuted,
@@ -101,6 +115,10 @@ function Dropdown.new(name, options)
 				CanvasSize = UDim2.new(),
 
 				create("UIListLayout")({ Padding = UDim.new(0, 8), HorizontalAlignment = "Left", SortOrder = "LayoutOrder" }),
+				create("UIPadding")({ -- keeps row strokes off the clip edge
+					PaddingTop = UDim.new(0, 6),
+					PaddingBottom = UDim.new(0, 6),
+				}),
 
 				indexes(function()
 					return if open() then optionList() else {}
@@ -109,7 +127,7 @@ function Dropdown.new(name, options)
 
 					local hovered = source(false)
 					local bgColor = spring(function()
-						return if hovered() then Colors.buttonHover else Colors.surface
+						return if hovered() then Colors.buttonIdle else Colors.surface
 					end, 0.3)
 
 					local boxColor = spring(function() -- fills with accent when checked
@@ -122,6 +140,10 @@ function Dropdown.new(name, options)
 						BackgroundColor3 = bgColor,
 
 						create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+						create("UIStroke")({
+							Color = Colors.tabInactive,
+							Thickness = 1.5,
+						}),
 
 						create("TextLabel")({ -- option name, leaves room for the box on the right
 							Size = UDim2.new(1, -80, 1, 0),
@@ -137,7 +159,7 @@ function Dropdown.new(name, options)
 						}),
 
 						create("Frame")({ -- checkbox
-							Size = UDim2.fromOffset(28, 28),
+							Size = UDim2.fromOffset(24, 24),
 							AnchorPoint = Vector2.new(1, 0.5),
 							Position = UDim2.new(1, -16, 0.5, 0),
 							BackgroundColor3 = boxColor,
@@ -164,6 +186,13 @@ function Dropdown.new(name, options)
 					})
 				end),
 			}),
+
+			MouseEnter = function()
+				hovered(true)
+			end,
+			MouseLeave = function()
+				hovered(false)
+			end,
 		}),
 	})
 
