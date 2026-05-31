@@ -48,7 +48,7 @@ function InputBox.new(name, inputType, currentValue, placeholder, flag, callback
 	box = create("TextBox")({
 		Size = UDim2.fromScale(1, 1),
 		BackgroundTransparency = 1,
-		ClearTextOnFocus = false,
+		ClearTextOnFocus = true,
 
 		-- Text follows the committed value; vide only rewrites it on commit/:Set,
 		-- never mid-typing -> no cursor jumps

@@ -27,6 +27,15 @@ if toggle then
 			Callback = function(value) end,
 		})
 
+		local input = mainTab:CreateInput({
+			Name = "Input",
+			InputType = "number",
+			CurrentValue = 0,
+			Placeholder = "Enter amount",
+			Flag = "Input1",
+			Callback = function(value) end,
+		})
+
 		return window.node
 	end)
 end
