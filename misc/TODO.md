@@ -35,8 +35,8 @@ Eine Rayfield-artige UI-Bibliothek mit **vide**, modular in **Rojo**, am Ende al
 * **Label, Divider, Paragraph**: einfache Anzeige-Elemente fertig.
 
 ### Dropdown — Design fertig
-Optik und Aufbau stehen, Logik fehlt komplett (siehe unten).
-* Header mit Name links, Summary-Platzhalter rechts ("Select options"), Chevron der bei `open` umklappt; Klick-Overlay toggelt `open`.
+Optik und Aufbau stehen. Logik teilweise fertig (siehe unten).
+* Header mit Name links, Summary rechts, Chevron der bei `open` umklappt; Klick-Overlay toggelt `open`.
 * Panel als `Frame > ScrollingFrame`-Hülle: äußerer Frame gibt Farbe/Ecken und clippt, ScrollingFrame sitzt mit Rand innen (Scrollbar von der Außenkante weg).
 * Gedeckelte Höhe (278px) mit Innen-Scroll, genau 4 Optionen sichtbar, fünfte sauber weggeclippt.
 * Optionszeilen via `indexes` im Element-Look (Hover-Background + Stroke, Checkbox-Optik mit Accent-Fill).
@@ -46,7 +46,8 @@ Optik und Aufbau stehen, Logik fehlt komplett (siehe unten).
 ---
 
 ## 🐛 Offene Bugs
-* *(keine offenen Bugs)*
+
+* **Dropdown zuklappen — UICorner-Artefakt**: Beim Zuklappen überlappt der einfahrende Panel-Frame kurz die untere Kante des Headers, die runden UICorner sehen für ein paar Frames komisch aus. Ursache: Höhe wird an zwei Stellen animiert, die sich hinterherlaufen — Panel-Spring (278→0) und `AutomaticSize` des Node. Offene Designfrage: soll der Node beim Zuklappen fest auf Header-Höhe bleiben (nur Panel fährt ein) oder als Einheit mit-zusammenfahren?
 
 ### Gelöst
 * **Rechtsklick toggelte das UI (nur in UI Labs)**: Kein Code-Fehler — das UI-Labs-Widget liefert bei Rechtsklick ein Phantom-`InputEnded` mit `MouseButton1`. Im echten Play-Test (F5) tritt das nicht auf. *Lehre*: bei merkwürdigem Input-Verhalten gegen eine echte Sitzung gegenprüfen.
@@ -58,7 +59,12 @@ Optik und Aufbau stehen, Logik fehlt komplett (siehe unten).
 ### Dropdown — Logik (nächster Schwerpunkt)
 Reihenfolge bewusst von unten nach oben: erst die Datenbasis, dann was darauf aufbaut.
 
-1. [ ] **`selected`-Menge aufs Dropdown ziehen** (Fundament). Aktuell hat jede Zeile eine eigene lokale `checked`-source — läuft nirgends zusammen und wird beim Zuklappen zerstört (`indexes` liefert `{}`, Scopes werden weggeräumt → Haken weg). Stattdessen eine `selected`-source auf `Dropdown.new`-Ebene als `{ [optionName] = true }`; Zeilen leiten ihren Zustand daraus ab. Togglen übers Klon-Muster (klonen, Key setzen/löschen, zurückschreiben — nicht in-place).
-2. [ ] **Summary** im Header aus `selected` ableiten (statt festem "Select options").
+1. [x] **`selected`-Menge aufs Dropdown ziehen** (Fundament). `selected`-source auf `Dropdown.new`-Ebene als `{ [optionName] = true }`. Zeilen leiten ihren Zustand daraus ab (boxColor-Spring liest `selected()[option()]`), keine lokale `checked`-source mehr — die starb beim Zuklappen mit dem `indexes`-Scope. Togglen übers Klon-Muster (`table.clone` → `new[option()]` auf `true`/`nil` → zurückschreiben). `nil` statt `false`, damit `selected` exakt die Menge der Ausgewählten bleibt (Key da = ausgewählt, kein Wert-Check nötig).
+   *Lehre*: Die `indexes`-Komponente bekommt `option` als **Source**, nicht als rohen Wert. An Properties roh übergeben (`Text = option`, vide hält reaktiv), aber als Tabellen-Key oder in Bedingungen mit `option()` auslesen — sonst landet die Funktion als Key und ihre Identität wechselt beim Neubau.
+
+2. [x] **Summary** im Header aus `selected` abgeleitet (statt festem "Select options"). Über `selected()` iterieren und zählen, dann "All selected" / "N selected" / "Select options". Gesamtzahl über `#optionList()` (Array, `#` funktioniert). Reihenfolge der Checks: erst "alle", dann "mindestens eine", dann Fallback.
+   *Nebenbei erledigt*: Chevron-Rotation und Panel-Höhe laufen jetzt über `spring`. Optionen werden immer gerendert (`indexes` an `optionList` statt an `open()`), `ClipsDescendants` versteckt sie zugeklappt → Einfahren sieht sauber aus, kein Ausräum-Flackern mehr. (Offener UICorner-Bug siehe oben.)
+
 3. [ ] **Suchleiste** + **„All"-Toggle** als fixe erste Zeile im ScrollingFrame (Such-Feld rechts ~65%, All-Box links ~30%, manuell nebeneinander, kein Layout *innerhalb* der Zeile). Suche filtert die gerenderte Liste; „All" schreibt alle Namen in die Menge bzw. leert sie. Zeile ist eigenes festes Kind **neben** dem `indexes`-Block, nicht Teil davon (sonst verschwindet sie beim Zuklappen mit).
-4. [ ] **Außenschnittstelle**: `:Get`/`:Set` (still, ohne Callback) + `Callback` (nur
+
+4. [ ] **Außenschnittstelle**: `:Get`/`:Set` (still, ohne Callback) + `Callback` (nur bei echter Interaktion, konsistent mit Toggle/Slider/InputBox).

@@ -13,6 +13,8 @@ local Dropdown = {}
 function Dropdown.new(name, options)
 	local dropdown = {}
 
+	local selected = source({})
+
 	name = source(name)
 	local optionList = source(options or {})
 	local open = source(false) -- panel expanded?
@@ -20,6 +22,14 @@ function Dropdown.new(name, options)
 	local hovered = source(false)
 	local bgColor = spring(function()
 		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
+	end, 0.3)
+
+	local chevronRotation = spring(function()
+		return if open() then 180 else 0
+	end, 0.3)
+
+	local panelSize = spring(function()
+		return if open() then UDim2.new(1, 0, 0, 278) else UDim2.new(1, 0, 0, 0)
 	end, 0.3)
 
 	dropdown.node = create("Frame")({
@@ -54,7 +64,21 @@ function Dropdown.new(name, options)
 				Position = UDim2.new(1, -55, 0.5, 0),
 				BackgroundTransparency = 1,
 
-				Text = "Select options",
+				Text = function()
+					local count = 0
+
+					for _ in selected() do
+						count += 1
+					end
+
+					if count == #optionList() then
+						return "All selected"
+					elseif count > 0 then
+						return count .. " selected"
+					else
+						return "Select options"
+					end
+				end,
 				TextColor3 = Colors.textMuted,
 				TextSize = 20,
 				TextXAlignment = "Right",
@@ -69,9 +93,7 @@ function Dropdown.new(name, options)
 
 				Image = "rbxassetid://16093555964",
 				ImageColor3 = Colors.textMuted,
-				Rotation = function()
-					return if open() then 180 else 0
-				end,
+				Rotation = chevronRotation,
 			}),
 
 			create("TextButton")({ -- click overlay toggles open
@@ -93,9 +115,7 @@ function Dropdown.new(name, options)
 		}),
 
 		create("Frame")({ -- panel hull: gives color, corners, clips; scroll frame sits inside with margin
-			Size = function()
-				return if open() then UDim2.new(1, 0, 0, 278) else UDim2.new(1, 0, 0, 0)
-			end,
+			Size = panelSize,
 			LayoutOrder = 2,
 			BackgroundColor3 = bgColor, -- same spring as node, stays in sync
 			ClipsDescendants = true,
@@ -120,18 +140,14 @@ function Dropdown.new(name, options)
 					PaddingBottom = UDim.new(0, 6),
 				}),
 
-				indexes(function()
-					return if open() then optionList() else {}
-				end, function(option, i)
-					local checked = source(false) -- visual for now; real selection moves up next step
-
+				indexes(optionList, function(option, i)
 					local hovered = source(false)
 					local bgColor = spring(function()
 						return if hovered() then Colors.buttonIdle else Colors.surface
 					end, 0.3)
 
 					local boxColor = spring(function() -- fills with accent when checked
-						return if checked() then Colors.accent else Colors.background
+						return if selected()[option()] then Colors.accent else Colors.background
 					end, 0.2)
 
 					return create("Frame")({
@@ -180,7 +196,9 @@ function Dropdown.new(name, options)
 								hovered(false)
 							end,
 							Activated = function()
-								checked(not checked())
+								local new = table.clone(selected())
+								new[option()] = if new[option()] then nil else true
+								selected(new)
 							end,
 						}),
 					})
