@@ -156,8 +156,25 @@ local on = Toggle:Get() -- reads current state
 print(Toggle.flag)      -- "Toggle1"
 ```
 
-## Planned
+## Notifications
 
-The following is on the roadmap and **not yet available**:
+`PixlLib:Notify` shows a toast in the bottom-right corner. Toasts stack
+upward and remove themselves automatically after their duration.
 
-- **`PixlLib:Notify({ Title, Content, Image, Duration })`** — toast notifications stacking in the bottom-right corner.
+```luau
+PixlLib:Notify({
+    Title = "Saved",
+    Content = "Your configuration was saved successfully.",
+    Duration = 5, -- optional, seconds; defaults to 6
+})
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `Title` | string | Bold heading shown at the top of the toast. |
+| `Content` | string | Body text; wraps and grows the toast height automatically. |
+| `Duration` | number | Optional seconds before the toast disappears. Defaults to `6`. |
+
+Notifications require a window to be visible: `Notify` always records the
+toast, but it is only rendered once `CreateWindow` has been called (the
+window hosts the stack container).
