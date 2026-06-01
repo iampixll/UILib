@@ -11,7 +11,10 @@ if toggle then
 		vide = vide,
 		controls = {},
 	}, function(props)
-		local window = Window.new({ Title = "PixlLib" })
+		local window = Window.new({
+			Title = "PixlLib",
+			ToggleKey = "RightControl",
+		})
 
 		local mainTab = window:CreateTab("Main", 15637376279)
 

@@ -416,6 +416,8 @@ function Window.new(config)
 
 	local self = setmetatable({}, Window)
 
+	local toggleKey = Enum.KeyCode[config.ToggleKey or "K"]
+
 	self.tabs = source({})
 	self.activeTab = source(nil)
 
@@ -450,6 +452,17 @@ function Window.new(config)
 	local conn = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
 	vide.cleanup(conn)
 	updateScale()
+
+	local keyConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then
+			return
+		end
+
+		if input.KeyCode == toggleKey then
+			toggleMinimized()
+		end
+	end)
+	vide.cleanup(keyConn)
 
 	self.node = create("ScreenGui")({
 		create("UIScale")({ Scale = scale }),
