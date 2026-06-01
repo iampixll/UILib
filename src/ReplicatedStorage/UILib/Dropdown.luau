@@ -11,7 +11,9 @@ local changed = vide.changed
 
 local Dropdown = {}
 
-function Dropdown.new(name, options)
+function Dropdown.new(name, multiple, options)
+	multiple = if multiple == nil then true else multiple
+
 	local dropdown = {}
 
 	local selected = source({})
@@ -100,6 +102,9 @@ function Dropdown.new(name, options)
 				BackgroundTransparency = 1,
 
 				Text = function()
+					if not multiple then
+						return next(selected()) or "Select Option"
+					end
 					local count = 0
 
 					for _ in selected() do
@@ -179,7 +184,7 @@ function Dropdown.new(name, options)
 					BackgroundTransparency = 1,
 
 					create("Frame")({ -- search
-						Size = UDim2.new(0.775, 0, 1, 0),
+						Size = if multiple then UDim2.new(0.825, 0, 1, 0) else UDim2.new(1, 0, 1, 0),
 						BackgroundColor3 = searchBgColor,
 
 						create("UIStroke")({ -- matches the All button's outer stroke
@@ -197,7 +202,7 @@ function Dropdown.new(name, options)
 						create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
 						create("TextLabel")({ -- name, like the InputBox label
-							Size = UDim2.new(0.4, -16, 0.6, 0),
+							Size = UDim2.new(0.45, -16, 0.6, 0),
 							AnchorPoint = Vector2.new(0, 0.5),
 							Position = UDim2.new(0, 16, 0.5, 0),
 							BackgroundTransparency = 1,
@@ -210,9 +215,9 @@ function Dropdown.new(name, options)
 						}),
 
 						create("Frame")({ -- input field background
-							Size = UDim2.new(0.55, 0, 0.7, 0),
+							Size = if multiple then UDim2.new(0, 250, 0.6, 0) else UDim2.new(0, 300, 0.6, 0),
 							AnchorPoint = Vector2.new(1, 0.5),
-							Position = UDim2.new(1, -8, 0.5, 0),
+							Position = UDim2.new(1, -16, 0.5, 0),
 							BackgroundColor3 = searchBoxColor,
 
 							create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
@@ -253,9 +258,10 @@ function Dropdown.new(name, options)
 					}),
 
 					create("Frame")({ -- select-all button
-						Size = UDim2.new(0.2, 0, 1, 0),
+						Size = UDim2.new(0.15, 0, 1, 0),
 						AnchorPoint = Vector2.new(1, 0),
 						Position = UDim2.new(1, 0, 0, 0),
+						Visible = multiple,
 						BackgroundColor3 = allBgColor,
 
 						create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
@@ -333,6 +339,10 @@ function Dropdown.new(name, options)
 						return if selected()[option()] then Colors.accent else Colors.background
 					end, 0.2)
 
+					local markColor = spring(function()
+						return if selected()[option()] then Colors.accent else Colors.textMuted
+					end, 0.2)
+
 					return create("Frame")({
 						Size = UDim2.new(0.98, 0, 0, 60),
 						LayoutOrder = i + 1,
@@ -358,13 +368,25 @@ function Dropdown.new(name, options)
 						}),
 
 						create("Frame")({ -- checkbox
-							Size = UDim2.fromOffset(24, 24),
+							Size = UDim2.fromOffset(26, 26),
 							AnchorPoint = Vector2.new(1, 0.5),
 							Position = UDim2.new(1, -16, 0.5, 0),
+							Visible = multiple,
 							BackgroundColor3 = boxColor,
 
 							create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
 							create("UIStroke")({ Color = Colors.tabInactive, Thickness = 1.5 }),
+						}),
+
+						create("ImageLabel")({ -- fingerprint marker (single-select)
+							Size = UDim2.fromOffset(24, 24),
+							AnchorPoint = Vector2.new(1, 0.5),
+							Position = UDim2.new(1, -16, 0.5, 0),
+							BackgroundTransparency = 1,
+							Visible = not multiple,
+
+							Image = "rbxassetid://16089599792",
+							ImageColor3 = markColor,
 						}),
 
 						create("TextButton")({ -- click overlay: hover + toggle the box
@@ -379,9 +401,17 @@ function Dropdown.new(name, options)
 								hovered(false)
 							end,
 							Activated = function()
-								local new = table.clone(selected())
-								new[option()] = if new[option()] then nil else true
-								selected(new)
+								if multiple then
+									local new = table.clone(selected())
+									new[option()] = if new[option()] then nil else true
+									selected(new)
+								else
+									if selected()[option()] then
+										selected({})
+									else
+										selected({ [option()] = true })
+									end
+								end
 							end,
 						}),
 					})

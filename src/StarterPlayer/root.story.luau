@@ -15,27 +15,35 @@ if toggle then
 
 		local mainTab = window:CreateTab("Main", 15637376279)
 
-		local dropdown = mainTab:CreateDropdown({
+		mainTab:CreateDropdown({
 			Name = "Select Upgrades",
+			MultipleOptions = true,
 			Options = { "Option1", "Option2", "Option3", "Option4", "Option5", "Option6", "Option7", "Option8" },
 		})
 
-		local toggle = mainTab:CreateToggle({
+		mainTab:CreateToggle({
 			Name = "Toggle",
 			CurrentValue = false,
 			Flag = "Toggle1",
 			Callback = function(value) end,
 		})
 
-		local input = mainTab:CreateInput({
+		mainTab:CreateInput({
 			Name = "Input",
-			InputType = "number",
-			CurrentValue = 0,
+			InputType = "a",
+			CurrentValue = "",
 			Placeholder = "Enter amount",
 			Flag = "Input1",
 			Callback = function(value) end,
 		})
 
+		mainTab:CreateDivider("Divider")
+
+		mainTab:CreateDropdown({
+			Name = "Select Upgrades 2",
+			MultipleOptions = false,
+			Options = { "Option1", "Option2", "Option3", "Option4", "Option5", "Option6", "Option7", "Option8" },
+		})
 		return window.node
 	end)
 end
