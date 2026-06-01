@@ -6,7 +6,7 @@ local create = vide.create
 
 local Divider = {}
 
-function Divider.new(name)
+function Divider.new()
 	local divider = {}
 
 	divider.node = create("Frame")({

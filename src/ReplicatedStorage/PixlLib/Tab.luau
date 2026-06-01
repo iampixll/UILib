@@ -37,8 +37,8 @@ function Tab.new(name, image)
 		return addChild(self, Label.new(name))
 	end
 
-	function tab:CreateDivider(name)
-		return addChild(self, Divider.new(name))
+	function tab:CreateDivider()
+		return addChild(self, Divider.new())
 	end
 
 	function tab:CreateParagraph(config)
