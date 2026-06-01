@@ -2,7 +2,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local uilabs = require(ReplicatedStorage.Packages.uilabs)
 local vide = require(ReplicatedStorage.Packages.vide)
-local Window = require(ReplicatedStorage.UILib.Window)
+local UILib = require(ReplicatedStorage.UILib)
 
 local toggle = true
 
@@ -11,7 +11,7 @@ if toggle then
 		vide = vide,
 		controls = {},
 	}, function(props)
-		local window = Window.new({
+		local window = UILib:CreateWindow({
 			Title = "PixlLib",
 			ToggleKey = "RightControl",
 		})

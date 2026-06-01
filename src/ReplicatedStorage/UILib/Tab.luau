@@ -54,7 +54,7 @@ function Tab.new(name, image)
 	end
 
 	function tab:CreateInput(config)
-		return addChild(self, InputBox.new(config.Name, config.InputType, config.CurrentValue, config.Placeholder, config.Flag, config.Callback))
+		return addChild(self, InputBox.new(config.Name, config.IsNumber, config.CurrentValue, config.Placeholder, config.Flag, config.Callback))
 	end
 
 	function tab:CreateDropdown(config)

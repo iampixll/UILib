@@ -9,7 +9,7 @@ local spring = vide.spring
 
 local InputBox = {}
 
-function InputBox.new(name, inputType, currentValue, placeholder, flag, callback)
+function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback)
 	local input = {}
 	input.flag = flag
 
@@ -67,7 +67,7 @@ function InputBox.new(name, inputType, currentValue, placeholder, flag, callback
 
 		FocusLost = function() -- (enterPressed, inputObject)
 			focused(false)
-			if inputType == "number" then
+			if isNumber then
 				local num = tonumber(box.Text)
 				if num then
 					setValue(num, true) -- valid number, commit + fire

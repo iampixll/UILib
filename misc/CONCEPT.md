@@ -6,11 +6,7 @@
 ## Core
 - Window
 - Tabs
-- Collapsible Section / Accordion
 - Modal / Popup
-
-Hinweis: Collapsible Section und Modal sind Container — sie nehmen wie ein Tab
-andere Elemente auf und teilen vermutlich dieselbe children-Mechanik.
 
 ---
 
@@ -24,13 +20,11 @@ andere Elemente auf und teilen vermutlich dieselbe children-Mechanik.
 - Divider — reine Trennlinie, kein State, kein Callback.
 
 Designregel: Elemente haben einen Background (heben sich vom Hintergrund ab).
-Title ist die Ausnahme (transparent).
+Title & Divider sind die Ausnahmen (transparent).
 
 ## Input
 - Input — ein Textfeld mit Varianten via config.
   Geplant: type = "text" | "number", optional Filter/Validierung.
-- Keybind Picker — fängt eine Taste ab, speichert Enum.KeyCode als State.
-  (in Window-Config, optional auch über einen Customize-Tab änderbar)
 
 ## Selection
 - Dropdown — searchable (immer), optional multi-select.
@@ -40,7 +34,6 @@ Title ist die Ausnahme (transparent).
 ## Value
 - Slider — min/max, optional Dezimal, optional Eingabefeld, mit Snapping.
 - Progress Bar — reine Anzeige, nicht interaktiv. Wert kommt von außen.
-- Color Picker — Farbwahl (Wheel/Slider). Gehört eng zum Theme-System (Accent/Custom).
 
 ---
 
@@ -96,14 +89,9 @@ Title ist die Ausnahme (transparent).
 - config search
 - Modal/Popup zur Verwaltung
 
-## Interaction
-- Hotkeys
 
 ## Advanced
 - Error Handler
-
-## Utility
-- Clipboard Support
 
 ---
 
