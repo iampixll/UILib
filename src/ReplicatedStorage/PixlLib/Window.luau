@@ -3,8 +3,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local vide = require(ReplicatedStorage.Packages.vide)
-local Colors = require(ReplicatedStorage.UILib.Colors)
-local Tab = require(ReplicatedStorage.UILib.Tab)
+local Colors = require(ReplicatedStorage.PixlLib.Colors)
+local Tab = require(ReplicatedStorage.PixlLib.Tab)
 
 local camera = workspace.CurrentCamera
 local localPlayer = Players.LocalPlayer

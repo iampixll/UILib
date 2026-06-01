@@ -1,14 +1,14 @@
-# UILib
+# PixlLib
 
-A Rayfield-style UI library built with [Vide](https://github.com/centau/vide) and Rojo.
+A Rayfield-style UI library built with [Vide](https://github.com/centau/vide).
 
 ## Getting Started
 
-UILib lives in `ReplicatedStorage.UILib`. Require the folder itself to get the entry module:
+PixlLib lives in `ReplicatedStorage.PixlLib`. Require the folder itself to get the entry module:
 
 ```luau
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local UILib = require(ReplicatedStorage.UILib)
+local PixlLib = require(ReplicatedStorage.PixlLib)
 ```
 
 ## Creating a Window
@@ -16,7 +16,7 @@ local UILib = require(ReplicatedStorage.UILib)
 `CreateWindow` builds the main interface and returns a window handle.
 
 ```luau
-local Window = UILib:CreateWindow({
+local Window = PixlLib:CreateWindow({
     Title = "PixlLib",
     ToggleKey = "K", -- key to open/close the window, defaults to "K"
 })
@@ -32,7 +32,7 @@ The window can also be opened/closed with the always-visible top button, dragged
 ## Creating a Tab
 
 ```luau
-local Tab = Window:CreateTab("Main", 15637376279) -- name, icon asset id
+local Tab = Window:CreateTab("Tab Example", 15637376279) -- name, icon asset id
 ```
 
 The icon argument is an asset id (number). If omitted, a default icon is used. The first tab created becomes the active tab automatically.
@@ -160,4 +160,4 @@ print(Toggle.flag)      -- "Toggle1"
 
 The following is on the roadmap and **not yet available**:
 
-- **`UILib:Notify({ Title, Content, Image, Duration })`** — toast notifications stacking in the bottom-right corner.
+- **`PixlLib:Notify({ Title, Content, Image, Duration })`** — toast notifications stacking in the bottom-right corner.

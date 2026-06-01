@@ -1,14 +1,14 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local vide = require(ReplicatedStorage.Packages.vide)
-local Button = require(ReplicatedStorage.UILib.Button)
-local Divider = require(ReplicatedStorage.UILib.Divider)
-local Dropdown = require(ReplicatedStorage.UILib.Dropdown)
-local InputBox = require(ReplicatedStorage.UILib.InputBox)
-local Label = require(ReplicatedStorage.UILib.Label)
-local Paragraph = require(ReplicatedStorage.UILib.Paragraph)
-local Slider = require(ReplicatedStorage.UILib.Slider)
-local Toggle = require(ReplicatedStorage.UILib.Toggle)
+local Button = require(ReplicatedStorage.PixlLib.Button)
+local Divider = require(ReplicatedStorage.PixlLib.Divider)
+local Dropdown = require(ReplicatedStorage.PixlLib.Dropdown)
+local InputBox = require(ReplicatedStorage.PixlLib.InputBox)
+local Label = require(ReplicatedStorage.PixlLib.Label)
+local Paragraph = require(ReplicatedStorage.PixlLib.Paragraph)
+local Slider = require(ReplicatedStorage.PixlLib.Slider)
+local Toggle = require(ReplicatedStorage.PixlLib.Toggle)
 
 local source = vide.source
 

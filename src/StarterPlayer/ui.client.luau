@@ -2,7 +2,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local vide = require(ReplicatedStorage.Packages.vide)
-local Window = require(ReplicatedStorage.UILib.Window)
+local Window = require(ReplicatedStorage.PixlLib.Window)
 
 local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
