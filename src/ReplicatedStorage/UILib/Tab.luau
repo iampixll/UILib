@@ -58,7 +58,7 @@ function Tab.new(name, image)
 	end
 
 	function tab:CreateDropdown(config)
-		return addChild(self, Dropdown.new(config.Name, config.MultipleOptions, config.Options))
+		return addChild(self, Dropdown.new(config.Name, config.Options, config.MultipleOptions, config.Flag, config.Callback))
 	end
 
 	return tab

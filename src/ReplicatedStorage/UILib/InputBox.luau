@@ -107,7 +107,7 @@ function InputBox.new(name, inputType, currentValue, placeholder, flag, callback
 		}),
 
 		create("Frame")({ -- input field background
-			Size = UDim2.new(0.42, 0, 0.6, 0),
+			Size = UDim2.new(0.5, 0, 0.6, 0),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.new(1, -16, 0.5, 0),
 			BackgroundColor3 = boxColor,

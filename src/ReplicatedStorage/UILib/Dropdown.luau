@@ -11,12 +11,29 @@ local changed = vide.changed
 
 local Dropdown = {}
 
-function Dropdown.new(name, multiple, options)
+function Dropdown.new(name, options, multiple, flag, callback)
 	multiple = if multiple == nil then true else multiple
 
 	local dropdown = {}
 
+	dropdown.flag = flag
+
 	local selected = source({})
+
+	local function toArray(set)
+		local arr = {}
+		for name in set do
+			table.insert(arr, name)
+		end
+		return arr
+	end
+
+	local function setSelected(newSet, fireCallback)
+		selected(newSet)
+		if fireCallback and callback then
+			callback(toArray(newSet))
+		end
+	end
 
 	name = source(name)
 	local optionList = source(options or {})
@@ -306,13 +323,13 @@ function Dropdown.new(name, multiple, options)
 							end,
 							Activated = function()
 								if allSelected() then
-									selected({}) -- all on -> clear
+									setSelected({}, true)
 								else
 									local new = {}
 									for _, optionName in optionList() do
 										new[optionName] = true -- otherwise fill the whole list
 									end
-									selected(new)
+									setSelected(new, true)
 								end
 							end,
 						}),
@@ -404,12 +421,12 @@ function Dropdown.new(name, multiple, options)
 								if multiple then
 									local new = table.clone(selected())
 									new[option()] = if new[option()] then nil else true
-									selected(new)
+									setSelected(new, true)
 								else
 									if selected()[option()] then
-										selected({})
+										setSelected({}, true)
 									else
-										selected({ [option()] = true })
+										setSelected({ [option()] = true }, true)
 									end
 								end
 							end,
@@ -426,6 +443,18 @@ function Dropdown.new(name, multiple, options)
 			end,
 		}),
 	})
+
+	function dropdown:Get()
+		return toArray(selected())
+	end
+
+	function dropdown:Set(options)
+		local new = {}
+		for _, name in options do
+			new[name] = true
+		end
+		setSelected(new, false)
+	end
 
 	return dropdown
 end
