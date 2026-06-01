@@ -26,6 +26,17 @@ if toggle then
 			Callback = function(option) end,
 		})
 
+		local Button = mainTab:CreateButton({
+			Name = "Button Example",
+			Callback = function()
+				PixlLib:Notify({
+					Title = "Saved",
+					Content = "Your configuration was saved successfully.",
+					Duration = 2,
+				})
+			end,
+		})
+
 		return window.node
 	end)
 end

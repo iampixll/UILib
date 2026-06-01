@@ -431,8 +431,8 @@ local function createNotificationStack(props)
 			PaddingRight = UDim.new(0, 16),
 		}),
 
-		indexes(props.notifications, function(entry, id)
-			return Notification.new(entry()).node
+		indexes(props.notifications, function(entry, id, present)
+			return Notification.new(entry(), present).node, 0.4
 		end),
 	})
 end
