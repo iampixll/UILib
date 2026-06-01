@@ -4,6 +4,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local vide = require(ReplicatedStorage.Packages.vide)
 local Colors = require(ReplicatedStorage.PixlLib.Colors)
+local Notification = require(ReplicatedStorage.PixlLib.Notification)
 local Tab = require(ReplicatedStorage.PixlLib.Tab)
 
 local camera = workspace.CurrentCamera
@@ -411,7 +412,32 @@ local function createCurrentTab(props)
 	})
 end
 
-function Window.new(config)
+local function createNotificationStack(props)
+	return create("Frame")({
+		Size = UDim2.new(0, 350, 1, 0),
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+
+		create("UIListLayout")({
+			HorizontalAlignment = "Right",
+			VerticalAlignment = "Bottom",
+			Padding = UDim.new(0, 16),
+			SortOrder = "LayoutOrder",
+		}),
+
+		create("UIPadding")({
+			PaddingBottom = UDim.new(0, 16),
+			PaddingRight = UDim.new(0, 16),
+		}),
+
+		indexes(props.notifications, function(entry, id)
+			return Notification.new(entry()).node
+		end),
+	})
+end
+
+function Window.new(config, notifications)
 	config = config or {}
 
 	local self = setmetatable({}, Window)
@@ -521,6 +547,10 @@ function Window.new(config)
 			onToggleLock = function()
 				locked(not locked())
 			end,
+		}),
+
+		createNotificationStack({
+			notifications = notifications, -- the source, see below
 		}),
 	})
 
