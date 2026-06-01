@@ -15,6 +15,14 @@ if toggle then
 
 		local mainTab = window:CreateTab("Main", 15637376279)
 
+		mainTab:CreateDropdown({
+			Name = "Dropdown",
+			Options = { "Option1", "Option2", "Option3", "Option4" },
+			MultipleOptions = true,
+			Flag = "Dropdown1",
+			Callback = function(option) end,
+		})
+
 		return window.node
 	end)
 end

@@ -60,8 +60,8 @@ function Dropdown.new(name, options, multiple, flag, callback)
 		return if open() then 180 else 0
 	end, 0.3)
 
-	local panelSize = spring(function()
-		return if open() then UDim2.new(1, 0, 0, 278) else UDim2.new(1, 0, 0, 0)
+	local panelHeight = spring(function() -- single height source for the whole expand/collapse
+		return if open() then 278 else 0
 	end, 0.3)
 
 	local function allSelected()
@@ -87,16 +87,18 @@ function Dropdown.new(name, options, multiple, flag, callback)
 	end, 0.3)
 
 	dropdown.node = create("Frame")({
-		Size = UDim2.new(0.98, 0, 0, 0),
+		-- one frame, one animated height: header (60) + panel; clips the scroll frame as it grows/shrinks
+		Size = function()
+			return UDim2.new(0.98, 0, 0, 60 + panelHeight())
+		end,
 		BackgroundColor3 = bgColor,
-		AutomaticSize = "Y",
+		ClipsDescendants = true,
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-		create("UIListLayout")({ SortOrder = "LayoutOrder" }),
 
-		create("Frame")({ -- header row
+		create("Frame")({ -- header row, pinned to the top
 			Size = UDim2.new(1, 0, 0, 60),
-			LayoutOrder = 1,
+			Position = UDim2.fromScale(0, 0),
 			BackgroundTransparency = 1,
 
 			create("TextLabel")({ -- name on the left
@@ -171,269 +173,264 @@ function Dropdown.new(name, options, multiple, flag, callback)
 			end,
 		}),
 
-		create("Frame")({ -- panel hull: gives color, corners, clips; scroll frame sits inside with margin
-			Size = panelSize,
-			LayoutOrder = 2,
-			BackgroundColor3 = bgColor, -- same spring as node, stays in sync
-			ClipsDescendants = true,
+		create("ScrollingFrame")({ -- pinned below the header; height is the animated panel height
+			Size = function()
+				return UDim2.new(0.975, 0, 0, panelHeight())
+			end,
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 54), -- header bottom (60) minus the 6px pull-up
+			BackgroundTransparency = 1,
+			ScrollBarThickness = 4,
+			ScrollBarImageColor3 = Colors.textMuted,
+			AutomaticCanvasSize = "Y",
+			CanvasSize = UDim2.new(),
 
-			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+			create("UIListLayout")({ Padding = UDim.new(0, 8), HorizontalAlignment = "Left", SortOrder = "LayoutOrder" }),
+			create("UIPadding")({ -- keeps row strokes off the clip edge on all sides
+				PaddingTop = UDim.new(0, 6),
+				PaddingBottom = UDim.new(0, 6),
+				PaddingLeft = UDim.new(0, 4),
+				PaddingRight = UDim.new(0, 4),
+			}),
 
-			create("ScrollingFrame")({
-				Size = UDim2.new(0.975, 0, 1, 0),
-				AnchorPoint = Vector2.new(0.5, 0),
-				Position = UDim2.new(0.5, 0, 0, -6),
+			create("Frame")({ -- fixed top row: search (full InputBox element) + select-all
+				Size = UDim2.new(0.98, 0, 0, 60),
+				LayoutOrder = 0,
 				BackgroundTransparency = 1,
-				ScrollBarThickness = 4,
-				ScrollBarImageColor3 = Colors.textMuted,
-				AutomaticCanvasSize = "Y",
-				CanvasSize = UDim2.new(),
 
-				create("UIListLayout")({ Padding = UDim.new(0, 8), HorizontalAlignment = "Left", SortOrder = "LayoutOrder" }),
-				create("UIPadding")({ -- keeps row strokes off the clip edge
-					PaddingTop = UDim.new(0, 6),
-					PaddingBottom = UDim.new(0, 6),
-				}),
+				create("Frame")({ -- search
+					Size = if multiple then UDim2.new(0.8325, 0, 1, 0) else UDim2.new(1, 0, 1, 0),
+					BackgroundColor3 = searchBgColor,
 
-				create("Frame")({ -- fixed top row: search (full InputBox element) + select-all
-					Size = UDim2.new(0.98, 0, 0, 60),
-					LayoutOrder = 0,
-					BackgroundTransparency = 1,
+					create("UIStroke")({ -- matches the All button's outer stroke
+						Color = Colors.tabInactive,
+						Thickness = 1.5,
+					}),
 
-					create("Frame")({ -- search
-						Size = if multiple then UDim2.new(0.825, 0, 1, 0) else UDim2.new(1, 0, 1, 0),
-						BackgroundColor3 = searchBgColor,
+					MouseEnter = function()
+						searchHovered(true)
+					end,
+					MouseLeave = function()
+						searchHovered(false)
+					end,
 
-						create("UIStroke")({ -- matches the All button's outer stroke
-							Color = Colors.tabInactive,
+					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+					create("TextLabel")({ -- name, like the InputBox label
+						Size = UDim2.new(0.45, -16, 0.6, 0),
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.new(0, 16, 0.5, 0),
+						BackgroundTransparency = 1,
+
+						Text = "Browse Options",
+						TextColor3 = Colors.textPrimary,
+						TextSize = 22,
+						TextXAlignment = "Left",
+						FontFace = Font.fromName("Montserrat"),
+					}),
+
+					create("Frame")({ -- input field background
+						Size = if multiple then UDim2.new(0, 250, 0.6, 0) else UDim2.new(0, 300, 0.6, 0),
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -16, 0.5, 0),
+						BackgroundColor3 = searchBoxColor,
+
+						create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+						create("UIStroke")({
+							Color = searchStrokeColor,
 							Thickness = 1.5,
 						}),
+						create("UIPadding")({
+							PaddingLeft = UDim.new(0, 10),
+							PaddingRight = UDim.new(0, 10),
+						}),
+
+						create("TextBox")({
+							Size = UDim2.fromScale(1, 1),
+							BackgroundTransparency = 1,
+							ClearTextOnFocus = true,
+
+							Text = "",
+							PlaceholderText = "Option Name Here",
+							PlaceholderColor3 = Colors.textMuted,
+							TextColor3 = Colors.textPrimary,
+							TextSize = 22,
+							TextXAlignment = "Left",
+							FontFace = Font.fromName("Montserrat"),
+
+							Focused = function()
+								searchFocused(true)
+							end,
+							FocusLost = function()
+								searchFocused(false)
+							end,
+
+							changed("Text", function(text)
+								searchText(text)
+							end),
+						}),
+					}),
+				}),
+
+				create("Frame")({ -- select-all button
+					Size = UDim2.new(0.15, 0, 1, 0),
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, 0, 0, 0),
+					Visible = multiple,
+					BackgroundColor3 = allBgColor,
+
+					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+					create("UIStroke")({
+						Color = Colors.tabInactive,
+						Thickness = 1.5,
+					}),
+
+					create("TextLabel")({ -- "All" label
+						Size = UDim2.new(1, -56, 1, 0),
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.new(0, 16, 0.5, 0),
+						BackgroundTransparency = 1,
+
+						Text = "All",
+						TextColor3 = Colors.textPrimary,
+						TextSize = 22,
+						TextXAlignment = "Left",
+						FontFace = Font.fromName("Montserrat"),
+					}),
+
+					create("Frame")({ -- checkbox
+						Size = UDim2.fromOffset(24, 24),
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -16, 0.5, 0),
+						BackgroundColor3 = allBoxColor,
+
+						create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+						create("UIStroke")({ Color = Colors.tabInactive, Thickness = 1.5 }),
+					}),
+
+					create("TextButton")({ -- click overlay: hover + toggle all on/off
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+						Text = "",
 
 						MouseEnter = function()
-							searchHovered(true)
+							allHovered(true)
 						end,
 						MouseLeave = function()
-							searchHovered(false)
+							allHovered(false)
 						end,
-
-						create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-
-						create("TextLabel")({ -- name, like the InputBox label
-							Size = UDim2.new(0.45, -16, 0.6, 0),
-							AnchorPoint = Vector2.new(0, 0.5),
-							Position = UDim2.new(0, 16, 0.5, 0),
-							BackgroundTransparency = 1,
-
-							Text = "Browse Options",
-							TextColor3 = Colors.textPrimary,
-							TextSize = 22,
-							TextXAlignment = "Left",
-							FontFace = Font.fromName("Montserrat"),
-						}),
-
-						create("Frame")({ -- input field background
-							Size = if multiple then UDim2.new(0, 250, 0.6, 0) else UDim2.new(0, 300, 0.6, 0),
-							AnchorPoint = Vector2.new(1, 0.5),
-							Position = UDim2.new(1, -16, 0.5, 0),
-							BackgroundColor3 = searchBoxColor,
-
-							create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
-							create("UIStroke")({
-								Color = searchStrokeColor,
-								Thickness = 1.5,
-							}),
-							create("UIPadding")({
-								PaddingLeft = UDim.new(0, 10),
-								PaddingRight = UDim.new(0, 10),
-							}),
-
-							create("TextBox")({
-								Size = UDim2.fromScale(1, 1),
-								BackgroundTransparency = 1,
-								ClearTextOnFocus = true,
-
-								Text = "",
-								PlaceholderText = "Option Name Here",
-								PlaceholderColor3 = Colors.textMuted,
-								TextColor3 = Colors.textPrimary,
-								TextSize = 22,
-								TextXAlignment = "Left",
-								FontFace = Font.fromName("Montserrat"),
-
-								Focused = function()
-									searchFocused(true)
-								end,
-								FocusLost = function()
-									searchFocused(false)
-								end,
-
-								changed("Text", function(text)
-									searchText(text)
-								end),
-							}),
-						}),
-					}),
-
-					create("Frame")({ -- select-all button
-						Size = UDim2.new(0.15, 0, 1, 0),
-						AnchorPoint = Vector2.new(1, 0),
-						Position = UDim2.new(1, 0, 0, 0),
-						Visible = multiple,
-						BackgroundColor3 = allBgColor,
-
-						create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-						create("UIStroke")({
-							Color = Colors.tabInactive,
-							Thickness = 1.5,
-						}),
-
-						create("TextLabel")({ -- "All" label
-							Size = UDim2.new(1, -56, 1, 0),
-							AnchorPoint = Vector2.new(0, 0.5),
-							Position = UDim2.new(0, 16, 0.5, 0),
-							BackgroundTransparency = 1,
-
-							Text = "All",
-							TextColor3 = Colors.textPrimary,
-							TextSize = 22,
-							TextXAlignment = "Left",
-							FontFace = Font.fromName("Montserrat"),
-						}),
-
-						create("Frame")({ -- checkbox
-							Size = UDim2.fromOffset(24, 24),
-							AnchorPoint = Vector2.new(1, 0.5),
-							Position = UDim2.new(1, -16, 0.5, 0),
-							BackgroundColor3 = allBoxColor,
-
-							create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
-							create("UIStroke")({ Color = Colors.tabInactive, Thickness = 1.5 }),
-						}),
-
-						create("TextButton")({ -- click overlay: hover + toggle all on/off
-							Size = UDim2.fromScale(1, 1),
-							BackgroundTransparency = 1,
-							Text = "",
-
-							MouseEnter = function()
-								allHovered(true)
-							end,
-							MouseLeave = function()
-								allHovered(false)
-							end,
-							Activated = function()
-								if allSelected() then
-									setSelected({}, true)
-								else
-									local new = {}
-									for _, optionName in optionList() do
-										new[optionName] = true -- otherwise fill the whole list
-									end
-									setSelected(new, true)
+						Activated = function()
+							if allSelected() then
+								setSelected({}, true)
+							else
+								local new = {}
+								for _, optionName in optionList() do
+									new[optionName] = true -- otherwise fill the whole list
 								end
-							end,
-						}),
+								setSelected(new, true)
+							end
+						end,
 					}),
 				}),
-
-				indexes(function()
-					local query = searchText():lower()
-					local matches = {}
-					for _, name in optionList() do
-						if string.find(name:lower(), query, 1, true) then
-							table.insert(matches, name)
-						end
-					end
-
-					return matches
-				end, function(option, i)
-					local hovered = source(false)
-					local bgColor = spring(function()
-						return if hovered() then Colors.buttonIdle else Colors.surface
-					end, 0.3)
-
-					local boxColor = spring(function() -- fills with accent when checked
-						return if selected()[option()] then Colors.accent else Colors.background
-					end, 0.2)
-
-					local markColor = spring(function()
-						return if selected()[option()] then Colors.accent else Colors.textMuted
-					end, 0.2)
-
-					return create("Frame")({
-						Size = UDim2.new(0.98, 0, 0, 60),
-						LayoutOrder = i + 1,
-						BackgroundColor3 = bgColor,
-
-						create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-						create("UIStroke")({
-							Color = Colors.tabInactive,
-							Thickness = 1.5,
-						}),
-
-						create("TextLabel")({ -- option name, leaves room for the box on the right
-							Size = UDim2.new(1, -80, 1, 0),
-							AnchorPoint = Vector2.new(0, 0.5),
-							Position = UDim2.new(0, 16, 0.5, 0),
-							BackgroundTransparency = 1,
-
-							Text = option,
-							TextColor3 = Colors.textPrimary,
-							TextSize = 22,
-							TextXAlignment = "Left",
-							FontFace = Font.fromName("Montserrat"),
-						}),
-
-						create("Frame")({ -- checkbox
-							Size = UDim2.fromOffset(26, 26),
-							AnchorPoint = Vector2.new(1, 0.5),
-							Position = UDim2.new(1, -16, 0.5, 0),
-							Visible = multiple,
-							BackgroundColor3 = boxColor,
-
-							create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
-							create("UIStroke")({ Color = Colors.tabInactive, Thickness = 1.5 }),
-						}),
-
-						create("ImageLabel")({ -- fingerprint marker (single-select)
-							Size = UDim2.fromOffset(24, 24),
-							AnchorPoint = Vector2.new(1, 0.5),
-							Position = UDim2.new(1, -16, 0.5, 0),
-							BackgroundTransparency = 1,
-							Visible = not multiple,
-
-							Image = "rbxassetid://16089599792",
-							ImageColor3 = markColor,
-						}),
-
-						create("TextButton")({ -- click overlay: hover + toggle the box
-							Size = UDim2.fromScale(1, 1),
-							BackgroundTransparency = 1,
-							Text = "",
-
-							MouseEnter = function()
-								hovered(true)
-							end,
-							MouseLeave = function()
-								hovered(false)
-							end,
-							Activated = function()
-								if multiple then
-									local new = table.clone(selected())
-									new[option()] = if new[option()] then nil else true
-									setSelected(new, true)
-								else
-									if selected()[option()] then
-										setSelected({}, true)
-									else
-										setSelected({ [option()] = true }, true)
-									end
-								end
-							end,
-						}),
-					})
-				end),
 			}),
+
+			indexes(function()
+				local query = searchText():lower()
+				local matches = {}
+				for _, name in optionList() do
+					if string.find(name:lower(), query, 1, true) then
+						table.insert(matches, name)
+					end
+				end
+
+				return matches
+			end, function(option, i)
+				local hovered = source(false)
+				local bgColor = spring(function()
+					return if hovered() then Colors.buttonIdle else Colors.surface
+				end, 0.3)
+
+				local boxColor = spring(function() -- fills with accent when checked
+					return if selected()[option()] then Colors.accent else Colors.background
+				end, 0.2)
+
+				local markColor = spring(function()
+					return if selected()[option()] then Colors.accent else Colors.textMuted
+				end, 0.2)
+
+				return create("Frame")({
+					Size = UDim2.new(0.98, 0, 0, 60),
+					LayoutOrder = i + 1,
+					BackgroundColor3 = bgColor,
+
+					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+					create("UIStroke")({
+						Color = Colors.tabInactive,
+						Thickness = 1.5,
+					}),
+
+					create("TextLabel")({ -- option name, leaves room for the box on the right
+						Size = UDim2.new(1, -80, 1, 0),
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.new(0, 16, 0.5, 0),
+						BackgroundTransparency = 1,
+
+						Text = option,
+						TextColor3 = Colors.textPrimary,
+						TextSize = 22,
+						TextXAlignment = "Left",
+						FontFace = Font.fromName("Montserrat"),
+					}),
+
+					create("Frame")({ -- checkbox
+						Size = UDim2.fromOffset(26, 26),
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -16, 0.5, 0),
+						Visible = multiple,
+						BackgroundColor3 = boxColor,
+
+						create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+						create("UIStroke")({ Color = Colors.tabInactive, Thickness = 1.5 }),
+					}),
+
+					create("ImageLabel")({ -- fingerprint marker (single-select)
+						Size = UDim2.fromOffset(24, 24),
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, -16, 0.5, 0),
+						BackgroundTransparency = 1,
+						Visible = not multiple,
+
+						Image = "rbxassetid://16089599792",
+						ImageColor3 = markColor,
+					}),
+
+					create("TextButton")({ -- click overlay: hover + toggle the box
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+						Text = "",
+
+						MouseEnter = function()
+							hovered(true)
+						end,
+						MouseLeave = function()
+							hovered(false)
+						end,
+						Activated = function()
+							if multiple then
+								local new = table.clone(selected())
+								new[option()] = if new[option()] then nil else true
+								setSelected(new, true)
+							else
+								if selected()[option()] then
+									setSelected({}, true)
+								else
+									setSelected({ [option()] = true }, true)
+								end
+							end
+						end,
+					}),
+				})
+			end),
 
 			MouseEnter = function()
 				hovered(true)
