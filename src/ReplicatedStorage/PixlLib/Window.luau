@@ -169,7 +169,7 @@ local function createFooter(props)
 			Position = UDim2.fromScale(0.07, 0.5),
 			BackgroundTransparency = 1,
 
-			Text = "Welcome " .. props.playerName .. "!",
+			Text = "Welcome, " .. props.playerName .. "!",
 			TextSize = 28,
 			TextColor3 = Colors.textMuted,
 			TextXAlignment = "Left",
