@@ -61,7 +61,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 	end, 0.3)
 
 	local panelHeight = spring(function() -- single height source for the whole expand/collapse
-		return if open() then 278 else 0
+		return if open() then 294 else 0
 	end, 0.3)
 
 	local function allSelected()

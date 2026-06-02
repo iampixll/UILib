@@ -506,7 +506,7 @@ function Window.new(config, notifications)
 			Size = UDim2.fromOffset(960, 540),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = displayPos,
-			BackgroundColor3 = Colors.surface,
+			BackgroundColor3 = Colors.surfaceActive,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
