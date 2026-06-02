@@ -10,7 +10,7 @@ local spring = vide.spring
 
 local Slider = {}
 
-function Slider.new(name, suffix, range, increment, currentValue, flag, callback)
+function Slider.new(name, suffix, range, increment, currentValue, flag, callback, onChanged)
 	local slider = {}
 	slider.flag = flag
 
@@ -94,6 +94,9 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 
 	local endConn = UserInputService.InputEnded:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			if dragging() and onChanged then
+				onChanged()
+			end
 			dragging(false)
 		end
 	end)

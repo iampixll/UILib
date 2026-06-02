@@ -9,7 +9,7 @@ local spring = vide.spring
 
 local InputBox = {}
 
-function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback)
+function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback, onChanged)
 	local input = {}
 	input.flag = flag
 
@@ -40,6 +40,9 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback)
 			value(newValue)
 			if fireCallback and callback then
 				callback(newValue)
+			end
+			if fireCallback and onChanged then
+				onChanged()
 			end
 		end
 	end

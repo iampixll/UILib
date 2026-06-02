@@ -13,7 +13,7 @@ local THUMB_ON = UDim2.fromScale(0.72, 0.5)
 
 local Toggle = {}
 
-function Toggle.new(name, currentValue, flag, callback)
+function Toggle.new(name, currentValue, flag, callback, onChanged)
 	local toggle = {}
 
 	toggle.flag = flag
@@ -87,6 +87,10 @@ function Toggle.new(name, currentValue, flag, callback)
 				on(not on())
 				if callback then
 					callback(on())
+				end
+
+				if onChanged then
+					onChanged()
 				end
 			end,
 		}),

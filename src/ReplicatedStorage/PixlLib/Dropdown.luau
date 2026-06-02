@@ -11,7 +11,7 @@ local changed = vide.changed
 
 local Dropdown = {}
 
-function Dropdown.new(name, options, multiple, flag, callback)
+function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 	multiple = if multiple == nil then true else multiple
 
 	local dropdown = {}
@@ -32,6 +32,9 @@ function Dropdown.new(name, options, multiple, flag, callback)
 		selected(newSet)
 		if fireCallback and callback then
 			callback(toArray(newSet))
+		end
+		if fireCallback and onChanged then
+			onChanged()
 		end
 	end
 

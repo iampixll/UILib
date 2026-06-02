@@ -14,6 +14,13 @@ if toggle then
 		local window = PixlLib:CreateWindow({
 			Title = "PixlLib",
 			ToggleKey = "RightControl",
+
+			Configuration = {
+				Saving = true,
+				Loading = true,
+				FolderName = "PixlLib",
+				FileName = "PixlHub",
+			},
 		})
 
 		local mainTab = window:CreateTab("Main", 15637376279)
@@ -75,6 +82,8 @@ if toggle then
 			Title = "Paragraph Title",
 			Content = "Longer body text that wraps and grows in height automatically.",
 		})
+
+		PixlLib:Load()
 
 		return window.node
 	end)

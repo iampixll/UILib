@@ -19,13 +19,19 @@ local function addChild(self, handle)
 	table.insert(new, handle)
 	self.children(new)
 
+	if handle.flag then
+		self.flags[handle.flag] = handle
+	end
+
 	return handle
 end
 
-function Tab.new(name, image)
+function Tab.new(name, image, flags, onChanged)
 	local tab = {
 		name = name,
 		image = image,
+		flags = flags,
+		onChanged = onChanged,
 		children = source({}),
 	}
 
@@ -46,19 +52,19 @@ function Tab.new(name, image)
 	end
 
 	function tab:CreateToggle(config)
-		return addChild(self, Toggle.new(config.Name, config.CurrentValue, config.Flag, config.Callback))
+		return addChild(self, Toggle.new(config.Name, config.CurrentValue, config.Flag, config.Callback, self.onChanged))
 	end
 
 	function tab:CreateSlider(config)
-		return addChild(self, Slider.new(config.Name, config.Suffix, config.Range, config.Increment, config.CurrentValue, config.Flag, config.Callback))
+		return addChild(self, Slider.new(config.Name, config.Suffix, config.Range, config.Increment, config.CurrentValue, config.Flag, config.Callback, self.onChanged))
 	end
 
 	function tab:CreateInput(config)
-		return addChild(self, InputBox.new(config.Name, config.IsNumber, config.CurrentValue, config.Placeholder, config.Flag, config.Callback))
+		return addChild(self, InputBox.new(config.Name, config.IsNumber, config.CurrentValue, config.Placeholder, config.Flag, config.Callback, self.onChanged))
 	end
 
 	function tab:CreateDropdown(config)
-		return addChild(self, Dropdown.new(config.Name, config.Options, config.MultipleOptions, config.Flag, config.Callback))
+		return addChild(self, Dropdown.new(config.Name, config.Options, config.MultipleOptions, config.Flag, config.Callback, self.onChanged))
 	end
 
 	return tab

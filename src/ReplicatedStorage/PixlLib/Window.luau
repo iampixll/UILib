@@ -446,15 +446,18 @@ local function createNotificationStack(props)
 	})
 end
 
-function Window.new(config, notifications)
+function Window.new(config, notifications, flags, onChanged)
 	config = config or {}
 
 	local self = setmetatable({}, Window)
 
-	local toggleKey = Enum.KeyCode[config.ToggleKey or "K"]
+	self.flags = flags
+	self.onChanged = onChanged
 
 	self.tabs = source({})
 	self.activeTab = source(nil)
+
+	local toggleKey = Enum.KeyCode[config.ToggleKey or "K"]
 
 	local scale = source(1)
 	local minimized = source(false)
@@ -566,7 +569,7 @@ function Window.new(config, notifications)
 end
 
 function Window:CreateTab(name, image)
-	local tab = Tab.new(name, image)
+	local tab = Tab.new(name, image, self.flags, self.onChanged)
 
 	local new = table.clone(self.tabs())
 	table.insert(new, tab)

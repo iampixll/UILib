@@ -1,3 +1,4 @@
+local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local vide = require(ReplicatedStorage.Packages.vide)
@@ -6,6 +7,61 @@ local Window = require(ReplicatedStorage.PixlLib.Window)
 local source = vide.source
 
 local PixlLib = {}
+
+PixlLib.flags = {}
+
+function PixlLib:Save()
+	if not self.config or not self.config.Saving then
+		return
+	end
+
+	local data = {}
+	for flag, element in self.flags do
+		data[flag] = element:Get()
+	end
+
+	local json = HttpService:JSONEncode(data)
+
+	--
+	if writefile then
+		local folder = self.config.FolderName
+		if not isfolder(folder) then
+			makefolder(folder)
+		end
+		writefile(folder .. "/" .. self.config.FileName .. ".json", json)
+	else
+		print("PixlLib save (no writefile):", json)
+	end
+end
+
+function PixlLib:Load()
+	if not self.config or not self.config.Loading then
+		return
+	end
+
+	if not readfile then
+		print("PixlLib: readfile unavailable, skipping load") -- Studio: no file API
+		return
+	end
+
+	local path = self.config.FolderName .. "/" .. self.config.FileName .. ".json"
+	if not isfile(path) then
+		return -- nothing saved yet, nothing to load
+	end
+
+	local data = HttpService:JSONDecode(readfile(path)) -- string -> table
+
+	for flag, value in data do
+		local element = self.flags[flag]
+		if element then
+			element:Set(value) -- silent: no callback, no onChanged
+		end
+	end
+end
+
+local function onChanged()
+	PixlLib:Save()
+end
 
 local notifications = source({})
 local nextId = 0
@@ -33,7 +89,8 @@ function PixlLib:Notify(config)
 end
 
 function PixlLib:CreateWindow(config)
-	return Window.new(config, notifications)
+	self.config = config.Configuration
+	return Window.new(config, notifications, self.flags, onChanged)
 end
 
 return PixlLib
