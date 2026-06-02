@@ -11,29 +11,12 @@ local InputBox = {}
 
 function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback, onChanged)
 	local input = {}
+
 	input.flag = flag
 
 	name = source(name)
+
 	local value = source(currentValue or "") -- committed value, single source of truth
-
-	local focused = source(false)
-	local hovered = source(false)
-
-	local bgColor = spring(function() -- the row itself
-		return if hovered() then Colors.surfaceHover else Colors.surface
-	end, 0.3)
-
-	local boxColor = spring(function() -- inset field: darkest at rest, lifts on focus
-		return if focused() then Colors.surfaceActive else Colors.bg
-	end, 0.3)
-
-	local strokeColor = spring(function() -- accent border only while focused
-		return if focused() then Colors.accent else Colors.stroke
-	end, 0.3)
-
-	local textColor = spring(function() -- brightens on focus
-		return if focused() then Colors.textPrimary else Colors.textSecondary
-	end, 0.3)
 
 	local function setValue(newValue, fireCallback)
 		if newValue ~= value() then
@@ -47,89 +30,109 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback,
 		end
 	end
 
-	local box
-	box = create("TextBox")({
-		Size = UDim2.fromScale(1, 1),
-		BackgroundTransparency = 1,
-		ClearTextOnFocus = true,
+	function input:render()
+		local focused = source(false)
+		local hovered = source(false)
 
-		-- Text follows the committed value; vide only rewrites it on commit/:Set,
-		-- never mid-typing -> no cursor jumps
-		Text = value,
-		PlaceholderText = placeholder or "",
-		PlaceholderColor3 = Colors.textMuted,
+		local bgColor = spring(function() -- the row itself
+			return if hovered() then Colors.surfaceHover else Colors.surface
+		end, 0.3)
 
-		TextColor3 = textColor,
-		TextSize = 22,
-		TextXAlignment = "Left",
-		FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
+		local boxColor = spring(function() -- inset field: darkest at rest, lifts on focus
+			return if focused() then Colors.surfaceActive else Colors.bg
+		end, 0.3)
 
-		Focused = function()
-			focused(true)
-		end,
+		local strokeColor = spring(function() -- accent border only while focused
+			return if focused() then Colors.accent else Colors.stroke
+		end, 0.3)
 
-		FocusLost = function() -- (enterPressed, inputObject)
-			focused(false)
-			if isNumber then
-				local num = tonumber(box.Text)
-				if num then
-					setValue(num, true) -- valid number, commit + fire
-				else
-					box.Text = tostring(value()) -- reject: snap box back to last good value
-				end
-			else
-				setValue(box.Text, true)
-			end
-		end,
-	})
+		local textColor = spring(function() -- brightens on focus
+			return if focused() then Colors.textPrimary else Colors.textSecondary
+		end, 0.3)
 
-	input.node = create("Frame")({
-		Size = UDim2.new(0.98, 0, 0, 60),
-		BackgroundColor3 = bgColor,
-
-		MouseEnter = function()
-			hovered(true)
-		end,
-		MouseLeave = function()
-			hovered(false)
-		end,
-
-		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-
-		create("TextLabel")({ -- name
-			Size = UDim2.new(0.45, -16, 0.6, 0),
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.new(0, 16, 0.5, 0),
+		local box
+		box = create("TextBox")({
+			Size = UDim2.fromScale(1, 1),
 			BackgroundTransparency = 1,
+			ClearTextOnFocus = true,
 
-			Text = name,
-			TextColor3 = Colors.textPrimary,
+			-- Text follows the committed value; vide only rewrites it on commit/:Set,
+			-- never mid-typing -> no cursor jumps
+			Text = value,
+			PlaceholderText = placeholder or "",
+			PlaceholderColor3 = Colors.textMuted,
+
+			TextColor3 = textColor,
 			TextSize = 22,
 			TextXAlignment = "Left",
 			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
-		}),
 
-		create("Frame")({ -- input field background
-			Size = UDim2.new(0.5, 0, 0.6, 0),
-			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(1, -16, 0.5, 0),
-			BackgroundColor3 = boxColor,
+			Focused = function()
+				focused(true)
+			end,
 
-			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+			FocusLost = function() -- (enterPressed, inputObject)
+				focused(false)
+				if isNumber then
+					local num = tonumber(box.Text)
+					if num then
+						setValue(num, true) -- valid number, commit + fire
+					else
+						box.Text = tostring(value()) -- reject: snap box back to last good value
+					end
+				else
+					setValue(box.Text, true)
+				end
+			end,
+		})
+		return create("Frame")({
+			Size = UDim2.new(0.98, 0, 0, 60),
+			BackgroundColor3 = bgColor,
 
-			create("UIStroke")({
-				Color = strokeColor,
-				Thickness = 1.5,
+			MouseEnter = function()
+				hovered(true)
+			end,
+			MouseLeave = function()
+				hovered(false)
+			end,
+
+			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+			create("TextLabel")({ -- name
+				Size = UDim2.new(0.45, -16, 0.6, 0),
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 16, 0.5, 0),
+				BackgroundTransparency = 1,
+
+				Text = name,
+				TextColor3 = Colors.textPrimary,
+				TextSize = 22,
+				TextXAlignment = "Left",
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 			}),
 
-			create("UIPadding")({
-				PaddingLeft = UDim.new(0, 10),
-				PaddingRight = UDim.new(0, 10),
-			}),
+			create("Frame")({ -- input field background
+				Size = UDim2.new(0.5, 0, 0.6, 0),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -16, 0.5, 0),
+				BackgroundColor3 = boxColor,
 
-			box,
-		}),
-	})
+				create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+
+				create("UIStroke")({
+					Color = strokeColor,
+					Thickness = 1.5,
+				}),
+
+				create("UIPadding")({
+					PaddingLeft = UDim.new(0, 10),
+					PaddingRight = UDim.new(0, 10),
+				}),
+
+				box,
+			}),
+		})
+	end
 
 	function input:Get()
 		return value()

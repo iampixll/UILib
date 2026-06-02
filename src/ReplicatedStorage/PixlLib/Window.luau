@@ -413,7 +413,7 @@ local function createCurrentTab(props)
 					indexes(function()
 						return tab().children()
 					end, function(child)
-						return child().node
+						return child():render()
 					end),
 				}),
 			})

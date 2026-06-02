@@ -1,4 +1,5 @@
 local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local vide = require(ReplicatedStorage.Packages.vide)
@@ -8,7 +9,7 @@ local source = vide.source
 
 local PixlLib = {}
 
-PixlLib.flags = {}
+PixlLib.Flags = {}
 
 function PixlLib:Save()
 	if not self.config or not self.config.Saving then
@@ -16,13 +17,12 @@ function PixlLib:Save()
 	end
 
 	local data = {}
-	for flag, element in self.flags do
+	for flag, element in self.Flags do
 		data[flag] = element:Get()
 	end
 
 	local json = HttpService:JSONEncode(data)
 
-	--
 	if writefile then
 		local folder = self.config.FolderName
 		if not isfolder(folder) then
@@ -52,7 +52,7 @@ function PixlLib:Load()
 	local data = HttpService:JSONDecode(readfile(path)) -- string -> table
 
 	for flag, value in data do
-		local element = self.flags[flag]
+		local element = self.Flags[flag]
 		if element then
 			element:Set(value) -- silent: no callback, no onChanged
 		end
@@ -89,8 +89,35 @@ function PixlLib:Notify(config)
 end
 
 function PixlLib:CreateWindow(config)
+	if self._unmount then
+		self._unmount()
+	end
+
+	self.Flags = {}
 	self.config = config.Configuration
-	return Window.new(config, notifications, self.flags, onChanged)
+
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+
+	local window
+	local destroyScope = vide.mount(function()
+		window = Window.new(config, notifications, self.Flags, onChanged)
+		return window.node
+	end, playerGui)
+
+	self._unmount = function()
+		destroyScope()
+		if window.node then
+			window.node:Destroy()
+		end
+	end
+
+	if self.config and self.config.Loading then
+		task.defer(function()
+			self:Load()
+		end)
+	end
+
+	return window
 end
 
 return PixlLib

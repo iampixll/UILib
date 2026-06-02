@@ -9,10 +9,12 @@ local Divider = {}
 function Divider.new()
 	local divider = {}
 
-	divider.node = create("Frame")({
-		Size = UDim2.new(0.98, 0, 0, 5),
-		BackgroundTransparency = 1,
-	})
+	function divider:render()
+		return create("Frame")({
+			Size = UDim2.new(0.98, 0, 0, 5),
+			BackgroundTransparency = 1,
+		})
+	end
 
 	return divider
 end

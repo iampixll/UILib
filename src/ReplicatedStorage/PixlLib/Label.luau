@@ -13,18 +13,20 @@ function Label.new(name)
 
 	name = source(name)
 
-	label.node = create("TextLabel")({
-		Size = UDim2.new(0.98, 0, 0, 28),
-		BackgroundTransparency = 1,
+	function label:render()
+		return create("TextLabel")({
+			Size = UDim2.new(0.98, 0, 0, 28),
+			BackgroundTransparency = 1,
 
-		Text = name,
-		TextColor3 = Colors.textPrimary,
-		TextSize = 24,
-		TextXAlignment = "Left",
-		TextYAlignment = "Bottom",
+			Text = name,
+			TextColor3 = Colors.textPrimary,
+			TextSize = 24,
+			TextXAlignment = "Left",
+			TextYAlignment = "Bottom",
 
-		FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
-	})
+			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
+		})
+	end
 
 	function label:Set(newName)
 		name(newName)
