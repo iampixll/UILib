@@ -22,12 +22,12 @@ function Toggle.new(name, currentValue, flag, callback)
 	local on = source(currentValue or false) -- the actual bool state
 
 	local hovered = source(false)
-	local bgColor = spring(function()
-		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
+	local bgColor = spring(function() -- one step up the depth ladder on hover
+		return if hovered() then Colors.surfaceHover else Colors.surface
 	end, 0.3)
 
-	local trackColor = spring(function()
-		return if on() then Colors.accent else Colors.buttonIdle
+	local trackColor = spring(function() -- off-track sits on surfaceActive so it reads on both row states
+		return if on() then Colors.accent else Colors.surfaceActive
 	end, 0.3)
 
 	local thumbPos = spring(function()
@@ -50,7 +50,7 @@ function Toggle.new(name, currentValue, flag, callback)
 			TextColor3 = Colors.textPrimary,
 			TextSize = 22,
 			TextXAlignment = "Left",
-			FontFace = Font.fromName("Montserrat"),
+			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 		}),
 
 		create("Frame")({ -- switch track
@@ -60,11 +60,6 @@ function Toggle.new(name, currentValue, flag, callback)
 			BackgroundColor3 = trackColor,
 
 			create("UICorner")({ CornerRadius = UDim.new(1, 0) }), -- pill
-
-			create("UIStroke")({
-				Color = Colors.tabInactive,
-				Thickness = 1.5,
-			}),
 
 			create("Frame")({ -- thumb
 				Size = UDim2.fromScale(0.78, 0.78),

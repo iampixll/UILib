@@ -37,7 +37,7 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 	local hovered = source(false)
 
 	local bgColor = spring(function()
-		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
+		return if hovered() then Colors.surfaceHover else Colors.surface
 	end, 0.3)
 
 	local track
@@ -54,10 +54,10 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 	local fillFraction = spring(fraction, 0.15)
 
 	track = create("Frame")({ -- track
-		Size = UDim2.new(0.95, 0, 0, 12),
+		Size = UDim2.new(0.95, 0, 0, 10),
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -10),
-		BackgroundColor3 = Colors.background,
+		BackgroundColor3 = Colors.bg,
 
 		create("UICorner")({ CornerRadius = UDim.new(1, 0) }),
 
@@ -73,7 +73,7 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 		create("Frame")({ -- thumb
 			Size = function()
 				local s = thumbScale()
-				return UDim2.fromOffset(20 * s, 20 * s)
+				return UDim2.fromOffset(18 * s, 18 * s)
 			end,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = function()
@@ -114,7 +114,7 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 			TextColor3 = Colors.textPrimary,
 			TextSize = 22,
 			TextXAlignment = "Left",
-			FontFace = Font.fromName("Montserrat"),
+			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 		}),
 
 		create("TextLabel")({ -- value, reacts to the state
@@ -129,7 +129,7 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 			TextColor3 = Colors.textPrimary,
 			TextSize = 22,
 			TextXAlignment = "Right",
-			FontFace = Font.fromName("Montserrat"),
+			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 		}),
 
 		track,

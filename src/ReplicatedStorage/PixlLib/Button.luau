@@ -16,7 +16,7 @@ function Button.new(name, callback)
 
 	local hovered = source(false)
 	local bgColor = spring(function()
-		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
+		return if hovered() then Colors.surfaceHover else Colors.surface
 	end, 0.3)
 
 	button.node = create("Frame")({
@@ -35,7 +35,7 @@ function Button.new(name, callback)
 			TextColor3 = Colors.textPrimary,
 			TextSize = 22,
 			TextXAlignment = "Left",
-			FontFace = Font.fromName("Montserrat"),
+			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 		}),
 
 		create("ImageLabel")({ -- icon on the right

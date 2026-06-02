@@ -43,17 +43,17 @@ function Dropdown.new(name, options, multiple, flag, callback)
 
 	local searchFocused = source(false)
 
-	local searchBoxColor = spring(function() -- subtle lighten on focus
-		return if searchFocused() then Colors.surfaceHigh else Colors.background
+	local searchBoxColor = spring(function() -- inset field: darkest at rest, lifts on focus
+		return if searchFocused() then Colors.surfaceActive else Colors.bg
 	end, 0.3)
 
 	local searchStrokeColor = spring(function() -- accent border while focused
-		return if searchFocused() then Colors.accent else Colors.tabInactive
+		return if searchFocused() then Colors.accent else Colors.stroke
 	end, 0.3)
 
 	local hovered = source(false)
-	local bgColor = spring(function()
-		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
+	local bgColor = spring(function() -- drives the HEADER only (the visible hull when closed)
+		return if hovered() then Colors.surfaceHover else Colors.surface
 	end, 0.3)
 
 	local chevronRotation = spring(function()
@@ -73,17 +73,17 @@ function Dropdown.new(name, options, multiple, flag, callback)
 	end
 
 	local allHovered = source(false)
-	local allBgColor = spring(function() -- mirrors the option rows' hover
-		return if allHovered() then Colors.buttonIdle else Colors.surface
+	local allBgColor = spring(function() -- one step up the ladder on hover, like every row
+		return if allHovered() then Colors.surfaceHover else Colors.surface
 	end, 0.3)
 
 	local allBoxColor = spring(function() -- fills with accent when everything is selected
-		return if allSelected() then Colors.accent else Colors.background
+		return if allSelected() then Colors.accent else Colors.bg
 	end, 0.2)
 
 	local searchHovered = source(false)
 	local searchBgColor = spring(function() -- mirrors the option rows' / All button's hover
-		return if searchHovered() then Colors.buttonIdle else Colors.surface
+		return if searchHovered() then Colors.surfaceHover else Colors.surface
 	end, 0.3)
 
 	dropdown.node = create("Frame")({
@@ -91,15 +91,17 @@ function Dropdown.new(name, options, multiple, flag, callback)
 		Size = function()
 			return UDim2.new(0.98, 0, 0, 60 + panelHeight())
 		end,
-		BackgroundColor3 = bgColor,
+		BackgroundColor3 = Colors.bg, -- fixed dark backdrop the options rest on
 		ClipsDescendants = true,
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
-		create("Frame")({ -- header row, pinned to the top
+		create("Frame")({ -- header row, pinned to the top; this is the hoverable hull
 			Size = UDim2.new(1, 0, 0, 60),
 			Position = UDim2.fromScale(0, 0),
-			BackgroundTransparency = 1,
+			BackgroundColor3 = bgColor,
+
+			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
 			create("TextLabel")({ -- name on the left
 				Size = UDim2.new(0.5, -16, 1, 0),
@@ -111,7 +113,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 				TextColor3 = Colors.textPrimary,
 				TextSize = 22,
 				TextXAlignment = "Left",
-				FontFace = Font.fromName("Montserrat"),
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 			}),
 
 			create("TextLabel")({ -- summary on the right, derived from selection
@@ -175,19 +177,19 @@ function Dropdown.new(name, options, multiple, flag, callback)
 
 		create("ScrollingFrame")({ -- pinned below the header; height is the animated panel height
 			Size = function()
-				return UDim2.new(0.975, 0, 0, panelHeight())
+				return UDim2.new(0.975, 0, 0, panelHeight() - 10) -- gap subtracted so the bottom stays flush
 			end,
 			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.new(0.5, 0, 0, 54), -- header bottom (60) minus the 6px pull-up
+			Position = UDim2.new(0.5, 0, 0, 70), -- 10px below the header instead of pulling up
 			BackgroundTransparency = 1,
 			ScrollBarThickness = 4,
 			ScrollBarImageColor3 = Colors.textMuted,
 			AutomaticCanvasSize = "Y",
 			CanvasSize = UDim2.new(),
 
-			create("UIListLayout")({ Padding = UDim.new(0, 8), HorizontalAlignment = "Left", SortOrder = "LayoutOrder" }),
-			create("UIPadding")({ -- keeps row strokes off the clip edge on all sides
-				PaddingTop = UDim.new(0, 6),
+			create("UIListLayout")({ Padding = UDim.new(0, 12), HorizontalAlignment = "Left", SortOrder = "LayoutOrder" }),
+			create("UIPadding")({
+				PaddingTop = UDim.new(0, 2),
 				PaddingBottom = UDim.new(0, 6),
 				PaddingLeft = UDim.new(0, 4),
 				PaddingRight = UDim.new(0, 4),
@@ -203,7 +205,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 					BackgroundColor3 = searchBgColor,
 
 					create("UIStroke")({ -- matches the All button's outer stroke
-						Color = Colors.tabInactive,
+						Color = Colors.stroke,
 						Thickness = 1.5,
 					}),
 
@@ -216,7 +218,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 
 					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
-					create("TextLabel")({ -- name, like the InputBox label
+					create("TextLabel")({ -- name
 						Size = UDim2.new(0.45, -16, 0.6, 0),
 						AnchorPoint = Vector2.new(0, 0.5),
 						Position = UDim2.new(0, 16, 0.5, 0),
@@ -226,7 +228,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 						TextColor3 = Colors.textPrimary,
 						TextSize = 22,
 						TextXAlignment = "Left",
-						FontFace = Font.fromName("Montserrat"),
+						FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 					}),
 
 					create("Frame")({ -- input field background
@@ -281,7 +283,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 
 					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 					create("UIStroke")({
-						Color = Colors.tabInactive,
+						Color = Colors.stroke,
 						Thickness = 1.5,
 					}),
 
@@ -295,7 +297,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 						TextColor3 = Colors.textPrimary,
 						TextSize = 22,
 						TextXAlignment = "Left",
-						FontFace = Font.fromName("Montserrat"),
+						FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 					}),
 
 					create("Frame")({ -- checkbox
@@ -305,7 +307,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 						BackgroundColor3 = allBoxColor,
 
 						create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
-						create("UIStroke")({ Color = Colors.tabInactive, Thickness = 1.5 }),
+						create("UIStroke")({ Color = Colors.stroke, Thickness = 1.5 }),
 					}),
 
 					create("TextButton")({ -- click overlay: hover + toggle all on/off
@@ -346,12 +348,12 @@ function Dropdown.new(name, options, multiple, flag, callback)
 				return matches
 			end, function(option, i)
 				local hovered = source(false)
-				local bgColor = spring(function()
-					return if hovered() then Colors.buttonIdle else Colors.surface
+				local bgColor = spring(function() -- rests on surface over the dark backdrop, hovers one step up
+					return if hovered() then Colors.surfaceHover else Colors.surface
 				end, 0.3)
 
-				local boxColor = spring(function() -- fills with accent when checked
-					return if selected()[option()] then Colors.accent else Colors.background
+				local boxColor = spring(function() -- inset checkbox, fills with accent when checked
+					return if selected()[option()] then Colors.accent else Colors.bg
 				end, 0.2)
 
 				local markColor = spring(function()
@@ -365,7 +367,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 
 					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 					create("UIStroke")({
-						Color = Colors.tabInactive,
+						Color = Colors.stroke,
 						Thickness = 1.5,
 					}),
 
@@ -379,7 +381,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 						TextColor3 = Colors.textPrimary,
 						TextSize = 22,
 						TextXAlignment = "Left",
-						FontFace = Font.fromName("Montserrat"),
+						FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 					}),
 
 					create("Frame")({ -- checkbox
@@ -390,7 +392,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 						BackgroundColor3 = boxColor,
 
 						create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
-						create("UIStroke")({ Color = Colors.tabInactive, Thickness = 1.5 }),
+						create("UIStroke")({ Color = Colors.stroke, Thickness = 1.5 }),
 					}),
 
 					create("ImageLabel")({ -- fingerprint marker (single-select)
@@ -431,13 +433,6 @@ function Dropdown.new(name, options, multiple, flag, callback)
 					}),
 				})
 			end),
-
-			MouseEnter = function()
-				hovered(true)
-			end,
-			MouseLeave = function()
-				hovered(false)
-			end,
 		}),
 	})
 

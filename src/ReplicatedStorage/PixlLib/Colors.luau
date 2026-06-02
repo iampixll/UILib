@@ -1,11 +1,25 @@
 return {
-	background = Color3.fromRGB(43, 45, 49),
-	surface = Color3.fromRGB(30, 31, 34),
-	surfaceHigh = Color3.fromRGB(57, 60, 66),
-	accent = Color3.fromRGB(88, 101, 242),
-	buttonIdle = Color3.fromRGB(75, 78, 85),
-	buttonHover = Color3.fromRGB(95, 98, 106),
-	textPrimary = Color3.fromRGB(220, 223, 228),
-	textMuted = Color3.fromRGB(150, 153, 160),
-	tabInactive = Color3.fromRGB(110, 113, 120),
+	-- surfaces (dark -> light)
+	bg = Color3.fromRGB(14, 17, 22), -- window + panel base
+	surface = Color3.fromRGB(24, 28, 36), -- rows, controls
+	surfaceHover = Color3.fromRGB(32, 37, 47),
+	surfaceActive = Color3.fromRGB(38, 44, 56), -- active tab
+	stroke = Color3.fromRGB(42, 48, 60), -- 1px row borders
+
+	-- accent
+	accent = Color3.fromRGB(123, 97, 255),
+	accentSoft = Color3.fromRGB(157, 139, 255),
+	cyan = Color3.fromRGB(56, 224, 255), -- slider thumb only
+
+	-- text
+	textPrimary = Color3.fromRGB(236, 238, 245),
+	textSecondary = Color3.fromRGB(162, 168, 184),
+	textMuted = Color3.fromRGB(110, 117, 133),
+
+	-- transitional aliases -> delete once every element is migrated
+	background = Color3.fromRGB(14, 17, 22),
+	surfaceHigh = Color3.fromRGB(32, 37, 47),
+	buttonIdle = Color3.fromRGB(24, 28, 36),
+	buttonHover = Color3.fromRGB(32, 37, 47),
+	tabInactive = Color3.fromRGB(110, 117, 133),
 }

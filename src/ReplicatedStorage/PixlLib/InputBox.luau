@@ -19,20 +19,20 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback)
 	local focused = source(false)
 	local hovered = source(false)
 
-	local bgColor = spring(function() -- outer frame, hover highlight
-		return if hovered() then Colors.buttonHover else Colors.surfaceHigh
+	local bgColor = spring(function() -- the row itself
+		return if hovered() then Colors.surfaceHover else Colors.surface
 	end, 0.3)
 
-	local boxColor = spring(function() -- inner field, subtle lighten on focus
-		return if focused() then Colors.surfaceHigh else Colors.background
+	local boxColor = spring(function() -- inset field: darkest at rest, lifts on focus
+		return if focused() then Colors.surfaceActive else Colors.bg
 	end, 0.3)
 
-	local strokeColor = spring(function() -- accent border, only while focused
-		return if focused() then Colors.accent else Colors.tabInactive
+	local strokeColor = spring(function() -- accent border only while focused
+		return if focused() then Colors.accent else Colors.stroke
 	end, 0.3)
 
-	local textColor = spring(function() -- bright while focused, fades grey on blur
-		return if focused() then Colors.textPrimary else Colors.textMuted
+	local textColor = spring(function() -- brightens on focus
+		return if focused() then Colors.textPrimary else Colors.textSecondary
 	end, 0.3)
 
 	local function setValue(newValue, fireCallback)
@@ -59,7 +59,7 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback)
 		TextColor3 = textColor,
 		TextSize = 22,
 		TextXAlignment = "Left",
-		FontFace = Font.fromName("Montserrat"),
+		FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 
 		Focused = function()
 			focused(true)
@@ -103,7 +103,7 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback)
 			TextColor3 = Colors.textPrimary,
 			TextSize = 22,
 			TextXAlignment = "Left",
-			FontFace = Font.fromName("Montserrat"),
+			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 		}),
 
 		create("Frame")({ -- input field background
