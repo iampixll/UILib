@@ -20,6 +20,12 @@ local indexes = vide.indexes
 local OPENED_POSITION = UDim2.new(0.5, 0, 0.5, 0)
 local CLOSED_POSITION = UDim2.new(0.5, 0, 1.5, 0)
 
+-- layout raster (px, inside the mainframe) -- change PAD to tighten/loosen everywhere
+local PAD = 8
+local TOPBAR_H = 66
+local TABLIST_W = 220
+local ROW_Y = PAD + TOPBAR_H + PAD -- top of the tablist/content row
+
 local Window = {}
 Window.__index = Window
 
@@ -80,19 +86,17 @@ local function makeDraggable(positionSource, scale, locked)
 end
 
 local function createTopbar(props)
-	return create("Frame")({
-		Size = UDim2.fromScale(1, 0.1),
-		BackgroundColor3 = Colors.surfaceHigh,
+	local minimizeHovered = source(false)
+	local minimizeColor = spring(function()
+		return if minimizeHovered() then Colors.surfaceHigh2 else Colors.surfaceHover
+	end, 0.3)
+
+	return create("Frame")({ -- floating panel: PAD inset on top/left/right, fixed height
+		Size = UDim2.new(1, -PAD * 2, 0, TOPBAR_H),
+		Position = UDim2.fromOffset(PAD, PAD),
+		BackgroundColor3 = Colors.bg, -- panel, same family as tablist/content
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-
-		create("Frame")({ -- covers bottom corners, keeps them square
-			Size = UDim2.new(1, 0, 0, 12), -- height = corner radius
-			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.fromScale(0.5, 1),
-			BackgroundColor3 = Colors.surfaceHigh,
-			BorderSizePixel = 0,
-		}),
 
 		create("TextLabel")({
 			Size = UDim2.fromScale(0.5, 0.7),
@@ -107,11 +111,62 @@ local function createTopbar(props)
 			FontFace = Font.fromName("Montserrat", Enum.FontWeight.ExtraBold),
 		}),
 
-		create("ImageButton")({
-			Size = UDim2.fromOffset(35, 35),
+		create("Frame")({ -- player display
+			Size = UDim2.fromOffset(0, 40), -- X grows with content, Y fixed
+			AutomaticSize = "X",
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(0.98, -55, 0.5, 0),
+			BackgroundColor3 = Colors.surfaceHover, -- control resting on the bg panel
+
+			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+
+			create("UIListLayout")({ -- icon then name, side by side
+				FillDirection = "Horizontal",
+				VerticalAlignment = "Center",
+				Padding = UDim.new(0, 8),
+				SortOrder = "LayoutOrder",
+			}),
+
+			create("UIPadding")({ -- inner spacing so content isn't flush to the edges
+				PaddingLeft = UDim.new(0, 6),
+				PaddingRight = UDim.new(0, 10),
+			}),
+
+			create("Frame")({ -- avatar, fixed square, no manual position (layout places it)
+				Size = UDim2.fromOffset(32, 32),
+				LayoutOrder = 1,
+				BackgroundColor3 = Colors.surface,
+
+				create("UICorner")({ CornerRadius = UDim.new(1, 0) }),
+
+				create("ImageLabel")({
+					Size = UDim2.fromScale(1, 1),
+					BackgroundTransparency = 1,
+					Image = "rbxthumb://type=AvatarHeadShot&id=" .. props.userId .. "&w=420&h=420",
+
+					create("UICorner")({ CornerRadius = UDim.new(1, 0) }),
+				}),
+			}),
+
+			create("TextLabel")({ -- name, width grows with text
+				Size = UDim2.fromOffset(0, 35),
+				AutomaticSize = "X",
+				LayoutOrder = 2,
+				BackgroundTransparency = 1,
+
+				Text = props.playerName,
+				TextSize = 28,
+				TextColor3 = Colors.textSecondary,
+				TextXAlignment = "Left",
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
+			}),
+		}),
+
+		create("ImageButton")({ -- minimize button
+			Size = UDim2.fromOffset(40, 40),
 			AnchorPoint = Vector2.new(1, 0.5),
 			Position = UDim2.fromScale(0.98, 0.5),
-			BackgroundColor3 = Colors.buttonIdle,
+			BackgroundColor3 = minimizeColor,
 
 			Image = "rbxassetid://71627683074088",
 			ImageColor3 = Colors.textPrimary,
@@ -119,6 +174,13 @@ local function createTopbar(props)
 			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
 
 			MouseButton1Click = props.onMinimize,
+
+			MouseEnter = function()
+				minimizeHovered(true)
+			end,
+			MouseLeave = function()
+				minimizeHovered(false)
+			end,
 		}),
 
 		InputBegan = props.onDragBegan,
@@ -126,68 +188,17 @@ local function createTopbar(props)
 	})
 end
 
-local function createFooter(props)
-	return create("Frame")({
-		Size = UDim2.fromScale(1, 0.1),
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.fromScale(0, 1),
-		BackgroundColor3 = Colors.surfaceHigh,
-
-		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-
-		create("Frame")({ -- covers bottom corners, keeps them square
-			Size = UDim2.new(1, 0, 0, 12), -- height = corner radius
-			AnchorPoint = Vector2.new(0.5, 0),
-			Position = UDim2.fromScale(0.5, 0),
-			BackgroundColor3 = Colors.surfaceHigh,
-			BorderSizePixel = 0,
-		}),
-
-		create("Frame")({
-			Size = UDim2.fromOffset(35, 35),
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.fromScale(0.02, 0.5),
-			BackgroundColor3 = Colors.surface,
-
-			create("UICorner")({ CornerRadius = UDim.new(1, 0) }),
-
-			create("ImageLabel")({
-				Size = UDim2.fromScale(1, 1),
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
-				BackgroundTransparency = 1,
-
-				Image = "rbxthumb://type=AvatarHeadShot&id=" .. props.userId .. "&w=420&h=420",
-
-				create("UICorner")({ CornerRadius = UDim.new(1, 0) }),
-			}),
-		}),
-
-		create("TextLabel")({
-			Size = UDim2.fromScale(0.5, 0.7),
-			AnchorPoint = Vector2.new(0, 0.5),
-			Position = UDim2.fromScale(0.07, 0.5),
-			BackgroundTransparency = 1,
-
-			Text = "Welcome, " .. props.playerName .. "!",
-			TextSize = 28,
-			TextColor3 = Colors.textMuted,
-			TextXAlignment = "Left",
-			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
-		}),
-	})
-end
-
 local function createTopButton(props)
 	local iconTransparency = spring(function()
-		return if props.locked() then 0 else 1 -- 0 = visible, 1 = hidden
+		return if props.locked() then 0 else 1
 	end, 0.3)
 
 	return create("Frame")({
 		Size = UDim2.fromScale(0.075, 0.0375),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = props.position,
-		BackgroundColor3 = Colors.surfaceHigh,
+		BackgroundColor3 = Colors.surfaceHover, -- floating pill, lifted off the mainframe
+		ZIndex = 9999,
 
 		create("UICorner")({
 			CornerRadius = UDim.new(0, 12),
@@ -249,11 +260,10 @@ local function createTopButton(props)
 end
 
 local function createTabList(props)
-	return create("Frame")({ -- tablist
-		Size = UDim2.fromScale(0.225, 0.75),
-		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.fromScale(0.015, 0.5),
-		BackgroundColor3 = Colors.background,
+	return create("Frame")({ -- tablist: left column, below the topbar row
+		Size = UDim2.new(0, TABLIST_W, 1, -(ROW_Y + PAD)),
+		Position = UDim2.fromOffset(PAD, ROW_Y),
+		BackgroundColor3 = Colors.bg,
 
 		create("ScrollingFrame")({
 			Size = UDim2.fromScale(0.925, 0.95),
@@ -280,11 +290,11 @@ local function createTabList(props)
 
 				local function targetBgColor()
 					if props.activeTab() == tab() then
-						return Colors.surfaceHigh
+						return Colors.surfaceActive -- active: brightest static step
 					elseif hovered() then
-						return Colors.surfaceHigh
+						return Colors.surfaceHover -- real hover
 					else
-						return Colors.background
+						return Colors.bg -- idle: blends into the tablist panel
 					end
 				end
 				local bgColor = spring(targetBgColor, 0.3)
@@ -293,7 +303,7 @@ local function createTabList(props)
 					if props.activeTab() == tab() then
 						return Colors.textPrimary
 					else
-						return Colors.tabInactive
+						return Colors.textMuted
 					end
 				end
 				local textColor = spring(targetTextColor, 0.3)
@@ -367,11 +377,10 @@ local function createTabList(props)
 end
 
 local function createCurrentTab(props)
-	return create("Frame")({
-		Size = UDim2.fromScale(0.73, 0.75),
-		AnchorPoint = Vector2.new(1, 0.5),
-		Position = UDim2.fromScale(0.985, 0.5),
-		BackgroundColor3 = Colors.background,
+	return create("Frame")({ -- content: fills the rest of the row, right of the tablist
+		Size = UDim2.new(1, -(PAD + TABLIST_W + PAD + PAD), 1, -(ROW_Y + PAD)),
+		Position = UDim2.fromOffset(PAD + TABLIST_W + PAD, ROW_Y),
+		BackgroundColor3 = Colors.bg,
 
 		create("UICorner")({
 			CornerRadius = UDim.new(0, 12),
@@ -493,8 +502,8 @@ function Window.new(config, notifications)
 	self.node = create("ScreenGui")({
 		create("UIScale")({ Scale = scale }),
 
-		create("Frame")({ -- mainframe
-			Size = UDim2.fromOffset(960, 600),
+		create("Frame")({ -- mainframe (footer removed -> shorter)
+			Size = UDim2.fromOffset(960, 540),
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = displayPos,
 			BackgroundColor3 = Colors.surface,
@@ -512,10 +521,9 @@ function Window.new(config, notifications)
 				onMinimize = toggleMinimized,
 				onDragBegan = mainDrag.began,
 				onDragEnded = mainDrag.ended,
-			}),
-			createFooter({
-				userId = userId,
+
 				playerName = playerName,
+				userId = userId,
 			}),
 
 			createTabList({

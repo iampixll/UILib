@@ -126,7 +126,7 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 			Text = function()
 				return if suffix then value() .. " " .. suffix else tostring(value())
 			end,
-			TextColor3 = Colors.textPrimary,
+			TextColor3 = Colors.textSecondary,
 			TextSize = 22,
 			TextXAlignment = "Right",
 			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),

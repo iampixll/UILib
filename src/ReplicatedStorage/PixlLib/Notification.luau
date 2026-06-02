@@ -30,7 +30,7 @@ function Notification.new(config, present)
 			Position = function()
 				return UDim2.fromOffset(offset(), 0)
 			end,
-			BackgroundColor3 = Colors.surfaceHigh,
+			BackgroundColor3 = Colors.surfaceHover,
 			BackgroundTransparency = transparency,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
@@ -99,11 +99,11 @@ function Notification.new(config, present)
 				BackgroundTransparency = 1,
 				Text = config.Content,
 				TextWrapped = true,
-				TextColor3 = Colors.textPrimary,
+				TextColor3 = Colors.textSecondary,
 				TextTransparency = transparency,
 				TextSize = 22,
 				TextXAlignment = "Left",
-				FontFace = Font.fromName("Montserrat"),
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 			}),
 		}),
 	})

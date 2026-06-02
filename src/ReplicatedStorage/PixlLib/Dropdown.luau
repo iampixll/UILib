@@ -143,7 +143,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 				TextColor3 = Colors.textMuted,
 				TextSize = 20,
 				TextXAlignment = "Right",
-				FontFace = Font.fromName("Montserrat"),
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 			}),
 
 			create("ImageLabel")({ -- chevron, flips when open
@@ -204,11 +204,6 @@ function Dropdown.new(name, options, multiple, flag, callback)
 					Size = if multiple then UDim2.new(0.8325, 0, 1, 0) else UDim2.new(1, 0, 1, 0),
 					BackgroundColor3 = searchBgColor,
 
-					create("UIStroke")({ -- matches the All button's outer stroke
-						Color = Colors.stroke,
-						Thickness = 1.5,
-					}),
-
 					MouseEnter = function()
 						searchHovered(true)
 					end,
@@ -250,7 +245,7 @@ function Dropdown.new(name, options, multiple, flag, callback)
 						create("TextBox")({
 							Size = UDim2.fromScale(1, 1),
 							BackgroundTransparency = 1,
-							ClearTextOnFocus = true,
+							ClearTextOnFocus = false,
 
 							Text = "",
 							PlaceholderText = "Option Name Here",
@@ -282,10 +277,6 @@ function Dropdown.new(name, options, multiple, flag, callback)
 					BackgroundColor3 = allBgColor,
 
 					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-					create("UIStroke")({
-						Color = Colors.stroke,
-						Thickness = 1.5,
-					}),
 
 					create("TextLabel")({ -- "All" label
 						Size = UDim2.new(1, -56, 1, 0),
@@ -366,10 +357,6 @@ function Dropdown.new(name, options, multiple, flag, callback)
 					BackgroundColor3 = bgColor,
 
 					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
-					create("UIStroke")({
-						Color = Colors.stroke,
-						Thickness = 1.5,
-					}),
 
 					create("TextLabel")({ -- option name, leaves room for the box on the right
 						Size = UDim2.new(1, -80, 1, 0),

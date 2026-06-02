@@ -21,7 +21,11 @@ if toggle then
 		mainTab:CreateButton({
 			Name = "Button Example",
 			Callback = function()
-				-- runs when the button is clicked
+				PixlLib:Notify({
+					Title = "Saved",
+					Content = "Your configuration was saved successfully.",
+					Duration = 10, -- optional, seconds; defaults to 6
+				})
 			end,
 		})
 
@@ -55,8 +59,6 @@ if toggle then
 				-- value is a number, snapped to the increment
 			end,
 		})
-
-		mainTab:CreateDivider()
 
 		mainTab:CreateInput({
 			Name = "Input Example",

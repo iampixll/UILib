@@ -2,34 +2,75 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local vide = require(ReplicatedStorage.Packages.vide)
+local PixlLib = require(ReplicatedStorage.PixlLib)
 local Window = require(ReplicatedStorage.PixlLib.Window)
 
 local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
 vide.mount(function()
-	local window = Window.new({ Title = "PixlLib" })
+	local window = PixlLib:CreateWindow({
+		Title = "PixlLib",
+		ToggleKey = "RightControl",
+	})
 
 	local mainTab = window:CreateTab("Main", 15637376279)
 
-	local dropdown = mainTab:CreateDropdown({
-		Name = "Select Upgrades",
-		Options = { "Option1", "Option2", "Option3", "Option4", "Option5", "Option6", "Option7", "Option8" },
+	mainTab:CreateButton({
+		Name = "Button Example",
+		Callback = function()
+			PixlLib:Notify({
+				Title = "Saved",
+				Content = "Your configuration was saved successfully.",
+				Duration = 10, -- optional, seconds; defaults to 6
+			})
+		end,
 	})
 
-	local toggle = mainTab:CreateToggle({
-		Name = "Toggle",
+	mainTab:CreateDropdown({
+		Name = "Dropdown",
+		Options = { "Option1", "Option2", "Option3", "Option4" },
+		MultipleOptions = true,
+		Flag = "Dropdown1",
+		Callback = function(option) end,
+	})
+
+	mainTab:CreateToggle({
+		Name = "Toggle Example",
 		CurrentValue = false,
 		Flag = "Toggle1",
-		Callback = function(value) end,
+		Callback = function(value)
+			-- value is a boolean
+		end,
 	})
 
-	local input = mainTab:CreateInput({
-		Name = "Input",
-		InputType = "number",
-		CurrentValue = 0,
-		Placeholder = "Enter amount",
+	mainTab:CreateLabel("Label Example")
+
+	mainTab:CreateSlider({
+		Name = "Slider Example",
+		Range = { 0, 100 }, -- { min, max }
+		Increment = 10,
+		Suffix = "Bananas", -- optional, appended to the displayed value
+		CurrentValue = 10,
+		Flag = "Slider1",
+		Callback = function(value)
+			-- value is a number, snapped to the increment
+		end,
+	})
+
+	mainTab:CreateInput({
+		Name = "Input Example",
+		IsNumber = false, -- true restricts input to valid numbers
+		CurrentValue = "",
+		Placeholder = "Enter text",
 		Flag = "Input1",
-		Callback = function(value) end,
+		Callback = function(value)
+			-- value is a string, or a number when IsNumber is true
+		end,
+	})
+
+	mainTab:CreateParagraph({
+		Title = "Paragraph Title",
+		Content = "Longer body text that wraps and grows in height automatically.",
 	})
 
 	return window.node

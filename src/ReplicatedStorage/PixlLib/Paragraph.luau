@@ -4,18 +4,15 @@ local vide = require(ReplicatedStorage.Packages.vide)
 local Colors = require(ReplicatedStorage.PixlLib.Colors)
 
 local create = vide.create
-local source = vide.source
 
 local Paragraph = {}
 
 function Paragraph.new(title, content)
-	local paragrapgh = {}
+	local paragraph = {}
 
-	title = source(title)
-
-	paragrapgh.node = create("Frame")({
+	paragraph.node = create("Frame")({
 		Size = UDim2.new(0.98, 0, 0, 0),
-		BackgroundColor3 = Colors.surfaceHigh,
+		BackgroundColor3 = Colors.surface,
 		AutomaticSize = "Y",
 
 		create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
@@ -52,14 +49,14 @@ function Paragraph.new(title, content)
 
 			Text = content,
 			TextWrapped = true,
-			TextColor3 = Colors.textPrimary,
+			TextColor3 = Colors.textSecondary,
 			TextSize = 22,
 			TextXAlignment = "Left",
-			FontFace = Font.fromName("Montserrat"),
+			FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 		}),
 	})
 
-	return paragrapgh
+	return paragraph
 end
 
 return Paragraph
