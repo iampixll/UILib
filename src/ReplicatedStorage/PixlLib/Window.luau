@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
-local vide = require("../Packages/vide")
+local vide = require("./Packages/vide")
 local Colors = require("./Colors")
 local Notification = require("./Notification")
 local Tab = require("./Tab")

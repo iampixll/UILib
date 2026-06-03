@@ -1,2 +1,1 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-return require(ReplicatedStorage.PixlLib)
+return require(script.PixlLib)

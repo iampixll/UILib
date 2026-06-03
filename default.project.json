@@ -4,8 +4,11 @@
     "$className": "DataModel",
     "ReplicatedStorage": {
       "$path": "src/ReplicatedStorage",
-      "Packages": {
-        "$path": "Packages"
+      "PixlLib": {
+        "$path": "src/ReplicatedStorage/PixlLib",
+        "Packages": {
+          "$path": "Packages"
+        }
       }
     },
     "ServerScriptService": {

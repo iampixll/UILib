@@ -2,7 +2,7 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
 local vide = require("./Packages/vide")
-local Window = require("./PixlLib/Window")
+local Window = require("./Window")
 
 local source = vide.source
 

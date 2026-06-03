@@ -3,10 +3,10 @@
     "tree": {
         "$path": "src/build-entry/MainModule.luau",
         "PixlLib": {
-            "$path": "src/ReplicatedStorage/PixlLib"
-        },
-        "Packages": {
-            "$path": "Packages"
+            "$path": "src/ReplicatedStorage/PixlLib",
+            "Packages": {
+                "$path": "Packages"
+            }
         }
     }
 }

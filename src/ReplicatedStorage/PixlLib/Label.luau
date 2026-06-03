@@ -1,4 +1,4 @@
-local vide = require("../Packages/vide")
+local vide = require("./Packages/vide")
 local Colors = require("./Colors")
 
 local create = vide.create
