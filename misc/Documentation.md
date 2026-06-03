@@ -1,70 +1,32 @@
 # PixlLib
+A Rayfield-style UI library built with Vide
 
-A Rayfield-style UI library built with [Vide](https://github.com/centau/vide).
-
-## Getting Started
-
-PixlLib lives in `ReplicatedStorage.PixlLib`. Require the folder itself to get the entry module:
-
+## Booting the Library
 ```luau
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-local PixlLib = require(ReplicatedStorage.PixlLib)
+local PixlLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/iampixll/PixlLib/refs/heads/main/source.luau"))()
 ```
 
 ## Creating a Window
-
-`CreateWindow` builds the main interface and returns a window handle.
-
 ```luau
 local Window = PixlLib:CreateWindow({
 	Title = "PixlLib",
-	ToggleKey = "K", -- key to open/close the window, defaults to "K"
-})
-```
+	ToggleKey = "K", -- Enum.KeyCode name to minimize/restore, defaults to "K"
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `Title` | string | Text shown in the topbar. |
-| `ToggleKey` | string | Name of an `Enum.KeyCode` (e.g. `"K"`, `"RightControl"`). Pressing it minimizes/restores the window. Defaults to `"K"`. |
-| `Configuration` | table? | Optional. Enables saving/loading of element values — see below. |
-
-The window can also be minimized/restored with the always-visible top button, dragged by its topbar or top button, and locked in place by right-clicking the top button.
-
-To persist element values, pass a `Configuration` table. Saving and loading only happen when this is present and the respective flags are set:
-
-```luau
-local Window = PixlLib:CreateWindow({
-	Title = "PixlLib",
-	ToggleKey = "RightControl",
-
-	Configuration = {
-		Saving = true,
-		Loading = true,
+	Configuration = { -- optional; omit to disable saving/loading
+		Saving = true, -- writes element values to file (needs executor writefile)
+		Loading = true, -- reads them back on launch (skipped in Studio)
 		FolderName = "PixlLib",
-		FileName = "MyConfig",
+		FileName = "MyConfig", -- values are keyed by each element's Flag
 	},
 })
 ```
 
-Saving requires an executor with `writefile`/`readfile`; in Studio these are absent and loading is skipped gracefully. Values are keyed by each element's `Flag`.
-
 ## Creating a Tab
-
-`CreateTab` takes the name and an optional icon asset id as **positional** arguments (not a config table):
-
 ```luau
-local Tab = Window:CreateTab("Main", 15637376279) -- name, icon asset id
+local Tab = Window:CreateTab("Main", 15637376279) -- Name, icon asset id (positional, optional)
 ```
 
-The icon argument is an asset id (number, or the numeric string works too). If omitted, a default icon is used. The first tab created becomes the active tab automatically.
-
-## Elements
-
-All elements are created from a tab. Stateful elements return a handle exposing `:Get()`, `:Set()`, and a `flag` — see [Element Interface](#element-interface).
-
-### Button
-
+## Creating a Button
 ```luau
 local Button = Tab:CreateButton({
 	Name = "Button Example",
@@ -72,25 +34,23 @@ local Button = Tab:CreateButton({
 		-- runs when the button is clicked
 	end,
 })
+
+Button:Set("New Label") -- updates the button text
 ```
 
-`Button:Set(name)` updates the button's label.
-
-### Toggle
-
+## Creating a Toggle
 ```luau
 local Toggle = Tab:CreateToggle({
 	Name = "Toggle Example",
 	CurrentValue = false,
-	Flag = "Toggle1",
+	Flag = "Toggle1", -- identifier for config saving; keep every Flag unique
 	Callback = function(value)
 		-- value is a boolean
 	end,
 })
 ```
 
-### Slider
-
+## Creating a Slider
 ```luau
 local Slider = Tab:CreateSlider({
 	Name = "Slider Example",
@@ -105,12 +65,11 @@ local Slider = Tab:CreateSlider({
 })
 ```
 
-### Input
-
+## Creating an Input
 ```luau
 local Input = Tab:CreateInput({
 	Name = "Input Example",
-	IsNumber = false, -- true restricts input to valid numbers
+	IsNumber = false, -- true rejects non-numbers and snaps back to the last valid value
 	CurrentValue = "",
 	Placeholder = "Enter text",
 	Flag = "Input1",
@@ -120,36 +79,29 @@ local Input = Tab:CreateInput({
 })
 ```
 
-When `IsNumber` is `true`, invalid entries are rejected and the field snaps back to the last valid value.
-
-### Dropdown
-
+## Creating a Dropdown
 ```luau
 local Dropdown = Tab:CreateDropdown({
 	Name = "Dropdown Example",
 	Options = { "Option1", "Option2", "Option3" },
-	MultipleOptions = true, -- defaults to true; set false for single-select
+	MultipleOptions = true, -- defaults to true; false for single-select. Multi-select shows an "All" toggle
 	Flag = "Dropdown1",
 	Callback = function(options)
 		-- options is an array of the currently selected option names
 	end,
 })
+
+Dropdown:Set({ "Option1", "Option2" }) -- :Set takes an array, :Get returns one
 ```
 
-The panel includes a search field to filter options. In multi-select mode an "All" button selects/clears every option at once. `:Get()` returns an array of selected names, and `:Set()` takes an array of names.
-
-### Label
-
-`CreateLabel` takes the text as a **positional** string argument:
-
+## Creating a Label
 ```luau
-local Label = Tab:CreateLabel("Label Example")
+local Label = Tab:CreateLabel("Label Example") -- text is positional
+
+Label:Set("New text") -- updates the text
 ```
 
-`Label:Set(text)` updates the text.
-
-### Paragraph
-
+## Creating a Paragraph
 ```luau
 local Paragraph = Tab:CreateParagraph({
 	Title = "Paragraph Title",
@@ -157,47 +109,25 @@ local Paragraph = Tab:CreateParagraph({
 })
 ```
 
-### Divider
-
+## Creating a Divider
 ```luau
-local Divider = Tab:CreateDivider()
+local Divider = Tab:CreateDivider() -- blank spacer between elements
 ```
-
-A blank spacer used to separate elements.
 
 ## Element Interface
-
-Stateful elements (Toggle, Slider, Input, Dropdown) share a common interface:
-
-- **`element:Get()`** — returns the current value (boolean, number, string, or array of strings depending on the element).
-- **`element:Set(value)`** — sets the value **silently**: the state updates but the `Callback` does **not** fire. The callback only runs on real user interaction. This keeps loading saved configurations from re-triggering side effects.
-- **`element.flag`** — the identifier passed via `Flag`, used as the key under which the value is stored by the configuration system.
-
 ```luau
-Toggle:Set(true)        -- updates state, no callback
-local on = Toggle:Get() -- reads current state
-
-print(Toggle.flag)      -- "Toggle1"
+-- Toggle, Slider, Input and Dropdown share this interface:
+Toggle:Set(true) -- updates state SILENTLY: the Callback does NOT fire (only real user input fires it)
+local value = Toggle:Get() -- reads the current value (bool / number / string / array of strings)
+print(Toggle.flag) -- the Flag string, used as the config save key
+-- Button, Label, Paragraph and Divider have no value, no Flag and no :Get(); Button/Label keep :Set() for their text
 ```
 
-Button, Label, Paragraph and Divider have no stored value, so they have no `Flag` and no `:Get()`. Button and Label still expose `:Set()` to update their displayed text.
-
-## Notifications
-
-`PixlLib:Notify` shows a toast in the bottom-right corner. Toasts stack upward and remove themselves automatically after their duration.
-
+## Notifying the User
 ```luau
 PixlLib:Notify({
 	Title = "Saved",
 	Content = "Your configuration was saved successfully.",
 	Duration = 5, -- optional, seconds; defaults to 6
-})
+}) -- toasts stack bottom-right and need a window to be visible first
 ```
-
-| Field | Type | Description |
-| --- | --- | --- |
-| `Title` | string | Bold heading shown at the top of the toast. |
-| `Content` | string | Body text; wraps and grows the toast height automatically. |
-| `Duration` | number? | Optional seconds before the toast disappears. Defaults to `6`. |
-
-Notifications require a window to be visible: `Notify` always records the toast, but it is only rendered once `CreateWindow` has been called (the window hosts the stack container).
