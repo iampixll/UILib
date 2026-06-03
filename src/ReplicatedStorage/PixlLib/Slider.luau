@@ -1,8 +1,7 @@
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local vide = require(ReplicatedStorage.Packages.vide)
-local Colors = require(ReplicatedStorage.PixlLib.Colors)
+local vide = require("../Packages/vide")
+local Colors = require("./Colors")
 
 local create = vide.create
 local source = vide.source

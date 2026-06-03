@@ -1,11 +1,10 @@
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local vide = require(ReplicatedStorage.Packages.vide)
-local Colors = require(ReplicatedStorage.PixlLib.Colors)
-local Notification = require(ReplicatedStorage.PixlLib.Notification)
-local Tab = require(ReplicatedStorage.PixlLib.Tab)
+local vide = require("../Packages/vide")
+local Colors = require("./Colors")
+local Notification = require("./Notification")
+local Tab = require("./Tab")
 
 local camera = workspace.CurrentCamera
 local localPlayer = Players.LocalPlayer

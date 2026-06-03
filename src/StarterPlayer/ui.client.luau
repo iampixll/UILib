@@ -74,27 +74,3 @@ mainTab:CreateDropdown({
 	Flag = "Dropdown1",
 	Callback = function(option) end,
 })
-
-task.wait(5)
-
-local window2 = PixlLib:CreateWindow({
-	Title = "PixlLib",
-	ToggleKey = "RightControl",
-
-	Configuration = {
-		Saving = true,
-		Loading = true,
-		FolderName = "PixlLib",
-		FileName = "PixlHub",
-	},
-})
-local mainTab2 = window2:CreateTab("Main", 15637376279)
-
-mainTab2:CreateToggle({
-	Name = "Toggle Example",
-	CurrentValue = false,
-	Flag = "SuperMegaToggle",
-	Callback = function(value)
-		-- value is a boolean
-	end,
-})

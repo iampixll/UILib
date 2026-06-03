@@ -1,9 +1,8 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local vide = require(ReplicatedStorage.Packages.vide)
-local Window = require(ReplicatedStorage.PixlLib.Window)
+local vide = require("./Packages/vide")
+local Window = require("./PixlLib/Window")
 
 local source = vide.source
 
