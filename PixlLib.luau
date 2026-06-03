@@ -20,6 +20,14 @@ local PixlLib = {}
 
 PixlLib.Flags = {}
 
+local function getGuiParent()
+	if gethui then
+		return gethui()
+	end
+	-- studio / kein executor -> fallback
+	return Players.LocalPlayer:WaitForChild("PlayerGui")
+end
+
 function PixlLib:Save()
 	if not self.config or not self.config.Saving then
 		return
@@ -98,20 +106,19 @@ function PixlLib:Notify(config)
 end
 
 function PixlLib:CreateWindow(config)
-	if self._unmount then
-		self._unmount()
+	local env = getgenv and getgenv() or {}
+	if env.PixlLibUnmount then
+		env.PixlLibUnmount()
 	end
 
 	self.Flags = {}
 	self.config = config.Configuration
 
-	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-
 	local window
 	local destroyScope = vide.mount(function()
 		window = Window.new(config, notifications, self.Flags, onChanged)
 		return window.node
-	end, playerGui)
+	end, getGuiParent())
 
 	self._unmount = function()
 		destroyScope()
@@ -119,6 +126,8 @@ function PixlLib:CreateWindow(config)
 			window.node:Destroy()
 		end
 	end
+
+	env.PixlLibUnmount = self._unmount
 
 	if self.config and self.config.Loading then
 		task.defer(function()
@@ -1442,6 +1451,7 @@ local indexes = vide.indexes
 
 local OPENED_POSITION = UDim2.new(0.5, 0, 0.5, 0)
 local CLOSED_POSITION = UDim2.new(0.5, 0, 1.5, 0)
+local UI_SCALE = 0.85
 
 -- layout raster (px, inside the mainframe) -- change PAD to tighten/loosen everywhere
 local PAD = 8
@@ -1617,7 +1627,7 @@ local function createTopButton(props)
 	end, 0.3)
 
 	return create("Frame")({
-		Size = UDim2.fromScale(0.075, 0.0375),
+		Size = UDim2.fromOffset(140, 40),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = props.position,
 		BackgroundColor3 = Colors.surfaceHover, -- floating pill, lifted off the mainframe
@@ -1885,7 +1895,7 @@ function Window.new(config, notifications, flags, onChanged)
 	local scale = source(1)
 	local minimized = source(false)
 
-	local topButtonPos = source(UDim2.new(0.5, 0, 0.01, 0))
+	local topButtonPos = source(UDim2.new(0.5, 0, 0, 10))
 	local topDisplayPos = spring(topButtonPos, 0.1)
 	local locked = source(false)
 
@@ -1907,7 +1917,8 @@ function Window.new(config, notifications, flags, onChanged)
 
 	local function updateScale()
 		local vp = camera.ViewportSize
-		scale(math.min(vp.X / 1920, vp.Y / 1080))
+		local raw = math.min(vp.X / 1920, vp.Y / 1080)
+		scale(math.min(raw, 1) * UI_SCALE)
 	end
 
 	local conn = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
@@ -1926,6 +1937,9 @@ function Window.new(config, notifications, flags, onChanged)
 	vide.cleanup(keyConn)
 
 	self.node = create("ScreenGui")({
+		Name = "PixlLib",
+		IgnoreGuiInset = true,
+
 		create("UIScale")({ Scale = scale }),
 
 		create("Frame")({ -- mainframe (footer removed -> shorter)
@@ -4795,45 +4809,10 @@ local ObjectTree = {
                 },
                 {
                     {
-                        8,
+                        10,
                         2,
                         {
-                            "Label"
-                        }
-                    },
-                    {
-                        3,
-                        2,
-                        {
-                            "Button"
-                        }
-                    },
-                    {
-                        5,
-                        2,
-                        {
-                            "Divider"
-                        }
-                    },
-                    {
-                        9,
-                        2,
-                        {
-                            "Notification"
-                        }
-                    },
-                    {
-                        6,
-                        2,
-                        {
-                            "Dropdown"
-                        }
-                    },
-                    {
-                        12,
-                        2,
-                        {
-                            "Tab"
+                            "Paragraph"
                         }
                     },
                     {
@@ -4844,6 +4823,13 @@ local ObjectTree = {
                         }
                     },
                     {
+                        8,
+                        2,
+                        {
+                            "Label"
+                        }
+                    },
+                    {
                         14,
                         2,
                         {
@@ -4851,10 +4837,10 @@ local ObjectTree = {
                         }
                     },
                     {
-                        10,
+                        4,
                         2,
                         {
-                            "Paragraph"
+                            "Colors"
                         }
                     },
                     {
@@ -4886,80 +4872,10 @@ local ObjectTree = {
                                                 },
                                                 {
                                                     {
-                                                        33,
-                                                        2,
-                                                        {
-                                                            "indexes"
-                                                        }
-                                                    },
-                                                    {
-                                                        38,
-                                                        2,
-                                                        {
-                                                            "show"
-                                                        }
-                                                    },
-                                                    {
-                                                        26,
-                                                        2,
-                                                        {
-                                                            "create"
-                                                        }
-                                                    },
-                                                    {
-                                                        27,
-                                                        2,
-                                                        {
-                                                            "defaults"
-                                                        }
-                                                    },
-                                                    {
-                                                        41,
-                                                        2,
-                                                        {
-                                                            "switch"
-                                                        }
-                                                    },
-                                                    {
-                                                        44,
-                                                        2,
-                                                        {
-                                                            "values"
-                                                        }
-                                                    },
-                                                    {
-                                                        22,
-                                                        2,
-                                                        {
-                                                            "branch"
-                                                        }
-                                                    },
-                                                    {
-                                                        43,
-                                                        2,
-                                                        {
-                                                            "untrack"
-                                                        }
-                                                    },
-                                                    {
-                                                        29,
-                                                        2,
-                                                        {
-                                                            "effect"
-                                                        }
-                                                    },
-                                                    {
                                                         32,
                                                         2,
                                                         {
                                                             "implicit_effect"
-                                                        }
-                                                    },
-                                                    {
-                                                        40,
-                                                        2,
-                                                        {
-                                                            "spring"
                                                         }
                                                     },
                                                     {
@@ -4970,10 +4886,59 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
+                                                        23,
+                                                        2,
+                                                        {
+                                                            "changed"
+                                                        }
+                                                    },
+                                                    {
                                                         39,
                                                         2,
                                                         {
                                                             "source"
+                                                        }
+                                                    },
+                                                    {
+                                                        24,
+                                                        2,
+                                                        {
+                                                            "cleanup"
+                                                        }
+                                                    },
+                                                    {
+                                                        44,
+                                                        2,
+                                                        {
+                                                            "values"
+                                                        }
+                                                    },
+                                                    {
+                                                        29,
+                                                        2,
+                                                        {
+                                                            "effect"
+                                                        }
+                                                    },
+                                                    {
+                                                        43,
+                                                        2,
+                                                        {
+                                                            "untrack"
+                                                        }
+                                                    },
+                                                    {
+                                                        22,
+                                                        2,
+                                                        {
+                                                            "branch"
+                                                        }
+                                                    },
+                                                    {
+                                                        27,
+                                                        2,
+                                                        {
+                                                            "defaults"
                                                         }
                                                     },
                                                     {
@@ -4984,17 +4949,38 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        25,
+                                                        26,
                                                         2,
                                                         {
-                                                            "context"
+                                                            "create"
                                                         }
                                                     },
                                                     {
-                                                        37,
+                                                        41,
                                                         2,
                                                         {
-                                                            "root"
+                                                            "switch"
+                                                        }
+                                                    },
+                                                    {
+                                                        40,
+                                                        2,
+                                                        {
+                                                            "spring"
+                                                        }
+                                                    },
+                                                    {
+                                                        38,
+                                                        2,
+                                                        {
+                                                            "show"
+                                                        }
+                                                    },
+                                                    {
+                                                        19,
+                                                        2,
+                                                        {
+                                                            "action"
                                                         }
                                                     },
                                                     {
@@ -5005,6 +4991,13 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
+                                                        36,
+                                                        2,
+                                                        {
+                                                            "read"
+                                                        }
+                                                    },
+                                                    {
                                                         28,
                                                         2,
                                                         {
@@ -5012,10 +5005,17 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        31,
+                                                        37,
                                                         2,
                                                         {
-                                                            "graph"
+                                                            "root"
+                                                        }
+                                                    },
+                                                    {
+                                                        33,
+                                                        2,
+                                                        {
+                                                            "indexes"
                                                         }
                                                     },
                                                     {
@@ -5023,6 +5023,13 @@ local ObjectTree = {
                                                         2,
                                                         {
                                                             "lib"
+                                                        }
+                                                    },
+                                                    {
+                                                        31,
+                                                        2,
+                                                        {
+                                                            "graph"
                                                         }
                                                     },
                                                     {
@@ -5040,31 +5047,10 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        36,
+                                                        25,
                                                         2,
                                                         {
-                                                            "read"
-                                                        }
-                                                    },
-                                                    {
-                                                        24,
-                                                        2,
-                                                        {
-                                                            "cleanup"
-                                                        }
-                                                    },
-                                                    {
-                                                        19,
-                                                        2,
-                                                        {
-                                                            "action"
-                                                        }
-                                                    },
-                                                    {
-                                                        23,
-                                                        2,
-                                                        {
-                                                            "changed"
+                                                            "context"
                                                         }
                                                     }
                                                 }
@@ -5086,10 +5072,38 @@ local ObjectTree = {
                                                 },
                                                 {
                                                     {
-                                                        47,
+                                                        61,
+                                                        2,
+                                                        {
+                                                            "Version"
+                                                        }
+                                                    },
+                                                    {
+                                                        55,
+                                                        2,
+                                                        {
+                                                            "Environment"
+                                                        }
+                                                    },
+                                                    {
+                                                        60,
+                                                        2,
+                                                        {
+                                                            "Utils"
+                                                        }
+                                                    },
+                                                    {
+                                                        57,
+                                                        2,
+                                                        {
+                                                            "StoryCreators"
+                                                        }
+                                                    },
+                                                    {
+                                                        59,
                                                         1,
                                                         {
-                                                            "ControlTypings"
+                                                            "Typing"
                                                         }
                                                     },
                                                     {
@@ -5107,17 +5121,10 @@ local ObjectTree = {
                                                                 }
                                                             },
                                                             {
-                                                                49,
+                                                                50,
                                                                 2,
                                                                 {
-                                                                    "AdvancedControls"
-                                                                }
-                                                            },
-                                                            {
-                                                                54,
-                                                                2,
-                                                                {
-                                                                    "Utils"
+                                                                    "ControlConversion"
                                                                 }
                                                             },
                                                             {
@@ -5128,10 +5135,10 @@ local ObjectTree = {
                                                                 }
                                                             },
                                                             {
-                                                                50,
+                                                                49,
                                                                 2,
                                                                 {
-                                                                    "ControlConversion"
+                                                                    "AdvancedControls"
                                                                 }
                                                             },
                                                             {
@@ -5139,6 +5146,13 @@ local ObjectTree = {
                                                                 2,
                                                                 {
                                                                     "PrimitiveControls"
+                                                                }
+                                                            },
+                                                            {
+                                                                54,
+                                                                2,
+                                                                {
+                                                                    "Utils"
                                                                 }
                                                             }
                                                         }
@@ -5151,34 +5165,6 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        60,
-                                                        2,
-                                                        {
-                                                            "Utils"
-                                                        }
-                                                    },
-                                                    {
-                                                        59,
-                                                        1,
-                                                        {
-                                                            "Typing"
-                                                        }
-                                                    },
-                                                    {
-                                                        57,
-                                                        2,
-                                                        {
-                                                            "StoryCreators"
-                                                        }
-                                                    },
-                                                    {
-                                                        55,
-                                                        2,
-                                                        {
-                                                            "Environment"
-                                                        }
-                                                    },
-                                                    {
                                                         58,
                                                         2,
                                                         {
@@ -5186,10 +5172,10 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        61,
-                                                        2,
+                                                        47,
+                                                        1,
                                                         {
-                                                            "Version"
+                                                            "ControlTypings"
                                                         }
                                                     }
                                                 }
@@ -5199,19 +5185,26 @@ local ObjectTree = {
                                 }
                             },
                             {
-                                63,
-                                2,
-                                {
-                                    "vide"
-                                }
-                            },
-                            {
                                 62,
                                 2,
                                 {
                                     "uilabs"
                                 }
+                            },
+                            {
+                                63,
+                                2,
+                                {
+                                    "vide"
+                                }
                             }
+                        }
+                    },
+                    {
+                        12,
+                        2,
+                        {
+                            "Tab"
                         }
                     },
                     {
@@ -5222,6 +5215,13 @@ local ObjectTree = {
                         }
                     },
                     {
+                        5,
+                        2,
+                        {
+                            "Divider"
+                        }
+                    },
+                    {
                         7,
                         2,
                         {
@@ -5229,10 +5229,24 @@ local ObjectTree = {
                         }
                     },
                     {
-                        4,
+                        6,
                         2,
                         {
-                            "Colors"
+                            "Dropdown"
+                        }
+                    },
+                    {
+                        9,
+                        2,
+                        {
+                            "Notification"
+                        }
+                    },
+                    {
+                        3,
+                        2,
+                        {
+                            "Button"
                         }
                     }
                 }
@@ -5245,59 +5259,59 @@ local ObjectTree = {
 local LineOffsets = {
     8,
     11,
-    135,
-    211,
-    232,
-    254,
-    701,
-    849,
-    887,
-    1001,
-    1065,
-    1237,
-    1310,
-    1425,
-    [18] = 2011,
-    [19] = 2023,
-    [20] = 2050,
-    [21] = 2214,
-    [22] = 2239,
-    [23] = 2281,
-    [24] = 2301,
-    [25] = 2346,
-    [26] = 2422,
-    [27] = 2534,
-    [28] = 2649,
-    [29] = 2669,
-    [30] = 2683,
-    [31] = 2697,
-    [32] = 3020,
-    [33] = 3147,
-    [34] = 3270,
-    [35] = 3392,
-    [36] = 3405,
-    [37] = 3412,
-    [38] = 3449,
-    [39] = 3487,
-    [40] = 3520,
-    [41] = 3850,
-    [42] = 3966,
-    [43] = 3995,
-    [44] = 4022,
-    [46] = 4155,
-    [49] = 4221,
-    [50] = 4289,
-    [51] = 4327,
-    [52] = 4347,
-    [53] = 4386,
-    [54] = 4431,
-    [55] = 4449,
-    [57] = 4523,
-    [58] = 4605,
-    [60] = 4719,
-    [61] = 4771,
-    [62] = 4773,
-    [63] = 4776
+    144,
+    220,
+    241,
+    263,
+    710,
+    858,
+    896,
+    1010,
+    1074,
+    1246,
+    1319,
+    1434,
+    [18] = 2025,
+    [19] = 2037,
+    [20] = 2064,
+    [21] = 2228,
+    [22] = 2253,
+    [23] = 2295,
+    [24] = 2315,
+    [25] = 2360,
+    [26] = 2436,
+    [27] = 2548,
+    [28] = 2663,
+    [29] = 2683,
+    [30] = 2697,
+    [31] = 2711,
+    [32] = 3034,
+    [33] = 3161,
+    [34] = 3284,
+    [35] = 3406,
+    [36] = 3419,
+    [37] = 3426,
+    [38] = 3463,
+    [39] = 3501,
+    [40] = 3534,
+    [41] = 3864,
+    [42] = 3980,
+    [43] = 4009,
+    [44] = 4036,
+    [46] = 4169,
+    [49] = 4235,
+    [50] = 4303,
+    [51] = 4341,
+    [52] = 4361,
+    [53] = 4400,
+    [54] = 4445,
+    [55] = 4463,
+    [57] = 4537,
+    [58] = 4619,
+    [60] = 4733,
+    [61] = 4785,
+    [62] = 4787,
+    [63] = 4790
 }
 
 -- Misc AOT variable imports

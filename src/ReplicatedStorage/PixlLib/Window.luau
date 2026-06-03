@@ -18,6 +18,7 @@ local indexes = vide.indexes
 
 local OPENED_POSITION = UDim2.new(0.5, 0, 0.5, 0)
 local CLOSED_POSITION = UDim2.new(0.5, 0, 1.5, 0)
+local UI_SCALE = 0.85
 
 -- layout raster (px, inside the mainframe) -- change PAD to tighten/loosen everywhere
 local PAD = 8
@@ -193,7 +194,7 @@ local function createTopButton(props)
 	end, 0.3)
 
 	return create("Frame")({
-		Size = UDim2.fromScale(0.075, 0.0375),
+		Size = UDim2.fromOffset(140, 40),
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = props.position,
 		BackgroundColor3 = Colors.surfaceHover, -- floating pill, lifted off the mainframe
@@ -461,7 +462,7 @@ function Window.new(config, notifications, flags, onChanged)
 	local scale = source(1)
 	local minimized = source(false)
 
-	local topButtonPos = source(UDim2.new(0.5, 0, 0.01, 0))
+	local topButtonPos = source(UDim2.new(0.5, 0, 0, 10))
 	local topDisplayPos = spring(topButtonPos, 0.1)
 	local locked = source(false)
 
@@ -483,7 +484,8 @@ function Window.new(config, notifications, flags, onChanged)
 
 	local function updateScale()
 		local vp = camera.ViewportSize
-		scale(math.min(vp.X / 1920, vp.Y / 1080))
+		local raw = math.min(vp.X / 1920, vp.Y / 1080)
+		scale(math.min(raw, 1) * UI_SCALE)
 	end
 
 	local conn = camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
@@ -502,6 +504,9 @@ function Window.new(config, notifications, flags, onChanged)
 	vide.cleanup(keyConn)
 
 	self.node = create("ScreenGui")({
+		Name = "PixlLib",
+		IgnoreGuiInset = true,
+
 		create("UIScale")({ Scale = scale }),
 
 		create("Frame")({ -- mainframe (footer removed -> shorter)

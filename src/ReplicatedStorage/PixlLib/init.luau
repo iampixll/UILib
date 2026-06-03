@@ -10,6 +10,14 @@ local PixlLib = {}
 
 PixlLib.Flags = {}
 
+local function getGuiParent()
+	if gethui then
+		return gethui()
+	end
+	-- studio / kein executor -> fallback
+	return Players.LocalPlayer:WaitForChild("PlayerGui")
+end
+
 function PixlLib:Save()
 	if not self.config or not self.config.Saving then
 		return
@@ -88,20 +96,19 @@ function PixlLib:Notify(config)
 end
 
 function PixlLib:CreateWindow(config)
-	if self._unmount then
-		self._unmount()
+	local env = getgenv and getgenv() or {}
+	if env.PixlLibUnmount then
+		env.PixlLibUnmount()
 	end
 
 	self.Flags = {}
 	self.config = config.Configuration
 
-	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
-
 	local window
 	local destroyScope = vide.mount(function()
 		window = Window.new(config, notifications, self.Flags, onChanged)
 		return window.node
-	end, playerGui)
+	end, getGuiParent())
 
 	self._unmount = function()
 		destroyScope()
@@ -109,6 +116,8 @@ function PixlLib:CreateWindow(config)
 			window.node:Destroy()
 		end
 	end
+
+	env.PixlLibUnmount = self._unmount
 
 	if self.config and self.config.Loading then
 		task.defer(function()
