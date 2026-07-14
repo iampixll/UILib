@@ -17,40 +17,58 @@ local Window = PixlLib:CreateWindow({
 		Loading = true, -- reads them back on launch (skipped in Studio)
 		FolderName = "PixlLib",
 		FileName = "MyConfig", -- values are keyed by each element's Flag
+
+		FireCallbacksOnLoad = true, -- default. A restored toggle also runs its Callback, so
+		-- the feature behind it comes back on. Set to false when a restored config must not
+		-- act on its own at launch.
 	},
 })
 ```
 
-## Creating a Tab
+Saves are debounced (0.5s), so dragging a slider writes the file once, on release - not once
+per step.
+
+## Icons
+Anywhere an icon is taken (tabs, buttons, notifications) you may pass:
+
 ```luau
-local Tab = Window:CreateTab("Main", 15637376279) -- Name, icon asset id (positional, optional)
+"farming"                -- a name from Icons.Named (see PixlLib/Icons.luau)
+15637359494              -- a raw asset id
+"rbxassetid://15637359494" -- an explicit asset string (rbxthumb:// works too)
 ```
 
-## Creating a Button
+Unknown names warn and fall back, they never error.
+
+## Creating a Tab
+```luau
+local Tab = Window:CreateTab("Main", "house") -- Name, icon (optional)
+```
+
+## Elements
+
+### Button
 ```luau
 local Button = Tab:CreateButton({
 	Name = "Button Example",
-	Callback = function()
-		-- runs when the button is clicked
-	end,
+	Icon = "bell", -- optional
+	Callback = function() end,
 })
 
-Button:Set("New Label") -- updates the button text
+Button:Set("New Label") -- relabels it
+Button:SetIcon("settings")
 ```
 
-## Creating a Toggle
+### Toggle
 ```luau
 local Toggle = Tab:CreateToggle({
 	Name = "Toggle Example",
 	CurrentValue = false,
 	Flag = "Toggle1", -- identifier for config saving; keep every Flag unique
-	Callback = function(value)
-		-- value is a boolean
-	end,
+	Callback = function(value) end, -- value is a boolean
 })
 ```
 
-## Creating a Slider
+### Slider
 ```luau
 local Slider = Tab:CreateSlider({
 	Name = "Slider Example",
@@ -59,13 +77,13 @@ local Slider = Tab:CreateSlider({
 	Suffix = "Bananas", -- optional, appended to the displayed value
 	CurrentValue = 10,
 	Flag = "Slider1",
-	Callback = function(value)
-		-- value is a number, snapped to the increment
-	end,
+	Callback = function(value) end, -- number, snapped to the increment
 })
+
+Slider:SetRange(0, 25) -- retarget it; the value is clamped into the new range
 ```
 
-## Creating an Input
+### Input
 ```luau
 local Input = Tab:CreateInput({
 	Name = "Input Example",
@@ -73,61 +91,112 @@ local Input = Tab:CreateInput({
 	CurrentValue = "",
 	Placeholder = "Enter text",
 	Flag = "Input1",
-	Callback = function(value)
-		-- value is a string, or a number when IsNumber is true
-	end,
+	Callback = function(value) end, -- string, or number when IsNumber is true
 })
 ```
 
-## Creating a Dropdown
+### Dropdown
 ```luau
 local Dropdown = Tab:CreateDropdown({
 	Name = "Dropdown Example",
 	Options = { "Option1", "Option2", "Option3" },
+	CurrentOption = { "Option1" }, -- optional; applied without firing the Callback
 	MultipleOptions = true, -- defaults to true; false for single-select. Multi-select shows an "All" toggle
 	Flag = "Dropdown1",
-	Callback = function(options)
-		-- options is an array of the currently selected option names
-	end,
+	Callback = function(options) end, -- array of the selected names
 })
 
-Dropdown:Set({ "Option1", "Option2" }) -- :Set takes an array, :Get returns one
+Dropdown:Refresh({ "New1", "New2" }) -- swap the options at runtime
+Dropdown:GetOptions() -- the current option list
 ```
 
-## Creating a Label
-```luau
-local Label = Tab:CreateLabel("Label Example") -- text is positional
+`:Refresh` is what you want when the options are not known while the UI is being built - a
+game directory that is still loading, a list that depends on what the player owns. Selections
+that still exist in the new list survive; the rest are dropped silently (the user did not
+deselect them, the option went away).
 
-Label:Set("New text") -- updates the text
+### Keybind
+```luau
+local Keybind = Tab:CreateKeybind({
+	Name = "Keybind Example",
+	CurrentKeybind = "F", -- KeyCode *name*, not the enum: that is what survives the config file
+	HoldToInteract = false, -- true: Callback(true) on press, Callback(false) on release
+	Flag = "Keybind1",
+	Callback = function() end,
+})
 ```
+Click the element, then press a key, to rebind it. Click again to cancel.
 
-## Creating a Paragraph
+### Label, Section, Paragraph, Divider
 ```luau
+local Label = Tab:CreateLabel("Label Example") -- body text
+local Section = Tab:CreateSection("Group Heading") -- muted heading with a rule, groups what follows
+local Divider = Tab:CreateDivider() -- a drawn line
+
 local Paragraph = Tab:CreateParagraph({
 	Title = "Paragraph Title",
 	Content = "Longer body text that wraps and grows in height automatically.",
 })
-```
 
-## Creating a Divider
-```luau
-local Divider = Tab:CreateDivider() -- blank spacer between elements
+Paragraph:Set("New Title")
+Paragraph:SetContent("New body text.")
 ```
 
 ## Element Interface
+Every element - value or not - has the same handle:
+
 ```luau
--- Toggle, Slider, Input and Dropdown share this interface:
-Toggle:Set(true) -- updates state SILENTLY: the Callback does NOT fire (only real user input fires it)
-local value = Toggle:Get() -- reads the current value (bool / number / string / array of strings)
-print(Toggle.flag) -- the Flag string, used as the config save key
--- Button, Label, Paragraph and Divider have no value, no Flag and no :Get(); Button/Label keep :Set() for their text
+Element:Get()               -- current value (bool / number / string / array of strings)
+Element:Set(value)          -- applies it AND fires the Callback, exactly like a click would
+Element:SetSilent(value)    -- applies it WITHOUT firing the Callback
+Element:SetName("New name")
+Element:SetVisible(false)   -- hide/show without destroying it
+Element:IsVisible()
+Element:Destroy()           -- removes it from the tab for good
+Element.Type                -- "Toggle", "Slider", "Dropdown", ...
+Element.Flag                -- the config key, if it has one
 ```
 
-## Notifying the User
+Elements without a value of their own (Button, Label, Section, Paragraph, Divider) treat their
+text as the value, so `Button:Set("Go")` relabels it and `:Get()` returns the text.
+
+## Reaching elements from anywhere
+Every element with a Flag is in the registry:
+
+```luau
+PixlLib.Flags.Toggle1:Set(true) -- turns the feature on, callback and all
+```
+
+## Window
+```luau
+Window:CreateTab(name, icon)
+Window:SelectTab(tab)
+Window:GetTabs()
+
+Window:SetVisibility(false) -- hides the whole interface, Open pill included
+Window:IsVisible()
+
+Window:Minimize()       -- flips it
+Window:Minimize(true)   -- slides the window away, leaves the Open pill
+Window:IsMinimized()
+```
+
+## Library
 ```luau
 PixlLib:Notify({
 	Title = "Saved",
 	Content = "Your configuration was saved successfully.",
+	Icon = "bell", -- optional
 	Duration = 5, -- optional, seconds; defaults to 6
-}) -- toasts stack bottom-right and need a window to be visible first
+})
+-- returns a function that dismisses the toast early
+
+PixlLib:Save() -- force a write now
+PixlLib:Load() -- re-apply the saved config
+PixlLib:SetVisibility(false)
+PixlLib:IsVisible()
+PixlLib:Destroy() -- flushes a pending save, then tears everything down
 ```
+
+Running the script a second time unmounts the previous interface automatically, so a stale
+window can never be left behind listening to input.

@@ -1,18 +1,25 @@
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
+local source = vide.source
 
 local Paragraph = {}
 
-function Paragraph.new(title, content)
-	local paragraph = {}
+function Paragraph.new(config)
+	-- The paragraph's heading is the element name, so :SetName() retitles it like every
+	-- other element; the body gets its own source.
+	local paragraph = Element.new("Paragraph", { Name = config.Title })
+	local title = paragraph.name
+	local content = source(config.Content or "")
 
 	function paragraph:render()
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 0),
 			BackgroundColor3 = Colors.surface,
 			AutomaticSize = "Y",
+			Visible = paragraph.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -54,6 +61,10 @@ function Paragraph.new(title, content)
 				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 			}),
 		})
+	end
+
+	function paragraph:SetContent(newContent: string)
+		content(newContent)
 	end
 
 	return paragraph

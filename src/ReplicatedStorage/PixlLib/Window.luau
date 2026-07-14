@@ -3,6 +3,8 @@ local UserInputService = game:GetService("UserInputService")
 
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Icons = require("./Icons")
+local Keybind = require("./Keybind")
 local Notification = require("./Notification")
 local Tab = require("./Tab")
 
@@ -343,8 +345,7 @@ local function createTabList(props)
 						BackgroundTransparency = 1,
 
 						Image = function()
-							local img = tab().image
-							return if img then "rbxassetid://" .. img else "rbxassetid://15637356511"
+							return tab().icon or Icons.resolve("misc")
 						end,
 
 						ImageColor3 = textColor,
@@ -497,15 +498,29 @@ function Window.new(config, notifications, flags, onChanged)
 			return
 		end
 
+		-- A keybind element is waiting for its new key: that press is being typed into the
+		-- element, so it must not also fold the window away.
+		if Keybind.IsCapturing() then
+			return
+		end
+
 		if input.KeyCode == toggleKey then
 			toggleMinimized()
 		end
 	end)
 	vide.cleanup(keyConn)
 
+	-- Hard on/off for the whole interface, separate from `minimized` (which is the animated
+	-- slide-away that leaves the Open pill behind). SetVisibility(false) leaves nothing.
+	local enabled = source(true)
+	self.enabled = enabled
+	self.minimized = minimized
+	self.toggleMinimized = toggleMinimized
+
 	self.node = create("ScreenGui")({
 		Name = "PixlLib",
 		IgnoreGuiInset = true,
+		Enabled = enabled,
 
 		create("UIScale")({ Scale = scale }),
 
@@ -572,8 +587,9 @@ function Window.new(config, notifications, flags, onChanged)
 	return self
 end
 
-function Window:CreateTab(name, image)
-	local tab = Tab.new(name, image, self.flags, self.onChanged)
+-- icon takes a name from Icons.Named ("farming"), a raw asset id, or an rbxassetid:// string
+function Window:CreateTab(name: string, icon: (string | number)?)
+	local tab = Tab.new(name, Icons.resolve(icon), self.flags, self.onChanged)
 
 	local new = table.clone(self.tabs())
 	table.insert(new, tab)
@@ -584,6 +600,36 @@ function Window:CreateTab(name, image)
 	end
 
 	return tab
+end
+
+function Window:SelectTab(tab)
+	self.activeTab(tab)
+end
+
+function Window:GetTabs()
+	return table.clone(self.tabs())
+end
+
+-- Shows/hides the entire interface, the Open pill included. This is the one to bind to a
+-- panic key; :Minimize() is the softer "get out of the way" the topbar button uses.
+function Window:SetVisibility(visible: boolean)
+	self.enabled(visible and true or false)
+end
+
+function Window:IsVisible(): boolean
+	return self.enabled()
+end
+
+function Window:Minimize(minimized: boolean?)
+	if minimized == nil then
+		self.toggleMinimized() -- no argument: flip it
+	elseif minimized ~= self.minimized() then
+		self.toggleMinimized()
+	end
+end
+
+function Window:IsMinimized(): boolean
+	return self.minimized()
 end
 
 return Window

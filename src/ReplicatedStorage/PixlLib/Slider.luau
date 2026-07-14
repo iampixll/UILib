@@ -2,6 +2,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
@@ -9,27 +10,53 @@ local spring = vide.spring
 
 local Slider = {}
 
-function Slider.new(name, suffix, range, increment, currentValue, flag, callback, onChanged)
-	local slider = {}
-	slider.flag = flag
+function Slider.new(config, onChanged)
+	local min, max = config.Range[1], config.Range[2]
+	local increment = config.Increment or 1
+	local suffix = config.Suffix
+	local callback = config.Callback
 
-	local min, max = range[1], range[2]
+	local value = source(math.clamp(config.CurrentValue or min, min, max))
 
-	name = source(name)
-	local value = source(currentValue)
+	local function snap(raw)
+		return math.clamp(math.round(raw / increment) * increment, min, max)
+	end
+
+	local function setValue(raw, fire)
+		raw = tonumber(raw)
+		if not raw then
+			return
+		end
+
+		local snapped = snap(raw)
+		if snapped == value() then
+			return
+		end
+
+		value(snapped)
+
+		if fire and callback then
+			callback(snapped)
+		end
+	end
+
+	local slider = Element.new("Slider", config, {
+		get = value,
+		set = function(raw, fire)
+			setValue(raw, fire)
+
+			-- Dragging saves once on release (see below); a programmatic Set has no release,
+			-- so it has to persist itself.
+			if fire and onChanged then
+				onChanged()
+			end
+		end,
+	})
+
+	local name = slider.name
 
 	local function fraction()
 		return (value() - min) / (max - min)
-	end
-
-	local function setValue(newValue, fireCallback)
-		local snapped = math.clamp(math.round(newValue / increment) * increment, min, max)
-		if snapped ~= value() then
-			value(snapped)
-			if fireCallback and callback then
-				callback(snapped)
-			end
-		end
 	end
 
 	function slider:render()
@@ -91,6 +118,8 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 
 		local endConn = UserInputService.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				-- Save once, on release: a drag walks through dozens of values and each one
+				-- would otherwise be written to disk.
 				if dragging() and onChanged then
 					onChanged()
 				end
@@ -102,6 +131,7 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 60),
 			BackgroundColor3 = bgColor,
+			Visible = slider.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -156,12 +186,12 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 		})
 	end
 
-	function slider:Get()
-		return value()
-	end
-
-	function slider:Set(newValue)
-		setValue(newValue, false)
+	-- Retarget the slider without rebuilding it. The value is clamped into the new range, so
+	-- a slider that pointed past the new maximum lands on it rather than showing a value it
+	-- can no longer reach.
+	function slider:SetRange(newMin: number, newMax: number)
+		min, max = newMin, newMax
+		setValue(math.clamp(value(), min, max), false)
 	end
 
 	return slider

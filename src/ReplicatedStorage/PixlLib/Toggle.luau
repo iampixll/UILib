@@ -1,5 +1,6 @@
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
@@ -11,23 +12,35 @@ local THUMB_ON = UDim2.fromScale(0.72, 0.5)
 
 local Toggle = {}
 
-function Toggle.new(name, currentValue, flag, callback, onChanged)
-	local toggle = {}
+function Toggle.new(config, onChanged)
+	local on = source(config.CurrentValue or false) -- the actual bool state
+	local callback = config.Callback
 
-	toggle.flag = flag
+	local function setValue(value, fire)
+		value = value and true or false -- a saved config can hand us anything
 
-	name = source(name)
-	local on = source(currentValue or false) -- the actual bool state
-
-	local function setValue(value, fireCallback)
-		on(value)
-		if fireCallback and callback then
-			callback(on())
+		if value == on() then
+			return
 		end
-		if fireCallback and onChanged then
-			onChanged()
+
+		on(value)
+
+		if fire then
+			if callback then
+				callback(value)
+			end
+			if onChanged then
+				onChanged()
+			end
 		end
 	end
+
+	local toggle = Element.new("Toggle", config, {
+		get = on,
+		set = setValue,
+	})
+
+	local name = toggle.name
 
 	function toggle:render()
 		local hovered = source(false)
@@ -46,6 +59,7 @@ function Toggle.new(name, currentValue, flag, callback, onChanged)
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 60),
 			BackgroundColor3 = bgColor,
+			Visible = toggle.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -84,6 +98,7 @@ function Toggle.new(name, currentValue, flag, callback, onChanged)
 			create("TextButton")({
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
+				Text = "",
 
 				MouseEnter = function()
 					hovered(true)
@@ -97,14 +112,6 @@ function Toggle.new(name, currentValue, flag, callback, onChanged)
 				end,
 			}),
 		})
-	end
-
-	function toggle:Get()
-		return on()
-	end
-
-	function toggle:Set(value)
-		setValue(value, false)
 	end
 
 	return toggle

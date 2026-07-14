@@ -1,5 +1,6 @@
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
@@ -7,26 +8,42 @@ local spring = vide.spring
 
 local InputBox = {}
 
-function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback, onChanged)
-	local input = {}
+function InputBox.new(config, onChanged)
+	local isNumber = config.IsNumber
+	local callback = config.Callback
 
-	input.flag = flag
+	local value = source(config.CurrentValue or "") -- committed value, single source of truth
 
-	name = source(name)
+	local function setValue(newValue, fire)
+		if isNumber then
+			newValue = tonumber(newValue)
+			if not newValue then
+				return -- a number box never holds a non-number, not even from a config file
+			end
+		end
 
-	local value = source(currentValue or "") -- committed value, single source of truth
+		if newValue == value() then
+			return
+		end
 
-	local function setValue(newValue, fireCallback)
-		if newValue ~= value() then
-			value(newValue)
-			if fireCallback and callback then
+		value(newValue)
+
+		if fire then
+			if callback then
 				callback(newValue)
 			end
-			if fireCallback and onChanged then
+			if onChanged then
 				onChanged()
 			end
 		end
 	end
+
+	local input = Element.new("Input", config, {
+		get = value,
+		set = setValue,
+	})
+
+	local name = input.name
 
 	function input:render()
 		local focused = source(false)
@@ -56,8 +73,10 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback,
 
 			-- Text follows the committed value; vide only rewrites it on commit/:Set,
 			-- never mid-typing -> no cursor jumps
-			Text = value,
-			PlaceholderText = placeholder or "",
+			Text = function()
+				return tostring(value())
+			end,
+			PlaceholderText = config.Placeholder or "",
 			PlaceholderColor3 = Colors.textMuted,
 
 			TextColor3 = textColor,
@@ -71,21 +90,20 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback,
 
 			FocusLost = function() -- (enterPressed, inputObject)
 				focused(false)
-				if isNumber then
-					local num = tonumber(box.Text)
-					if num then
-						setValue(num, true) -- valid number, commit + fire
-					else
-						box.Text = tostring(value()) -- reject: snap box back to last good value
-					end
-				else
-					setValue(box.Text, true)
+
+				if isNumber and not tonumber(box.Text) then
+					box.Text = tostring(value()) -- reject: snap box back to last good value
+					return
 				end
+
+				setValue(box.Text, true)
 			end,
 		})
+
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 60),
 			BackgroundColor3 = bgColor,
+			Visible = input.visible,
 
 			MouseEnter = function()
 				hovered(true)
@@ -130,14 +148,6 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback,
 				box,
 			}),
 		})
-	end
-
-	function input:Get()
-		return value()
-	end
-
-	function input:Set(newValue)
-		setValue(newValue, false) -- silent, consistent with Toggle/Slider
 	end
 
 	return input

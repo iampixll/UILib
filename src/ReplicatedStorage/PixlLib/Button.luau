@@ -1,5 +1,7 @@
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
+local Icons = require("./Icons")
 
 local create = vide.create
 local source = vide.source
@@ -7,10 +9,13 @@ local spring = vide.spring
 
 local Button = {}
 
-function Button.new(name, callback)
-	local button = {}
+function Button.new(config)
+	local button = Element.new("Button", config)
 
-	name = source(name)
+	local name = button.name
+	local icon = source(Icons.resolve(config.Icon) or Icons.resolve("fingerprint"))
+
+	local callback = config.Callback
 
 	function button:render()
 		local hovered = source(false)
@@ -21,6 +26,7 @@ function Button.new(name, callback)
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 44),
 			BackgroundColor3 = bgColor,
+			Visible = button.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -44,13 +50,14 @@ function Button.new(name, callback)
 				Position = UDim2.new(1, -20, 0.5, 0),
 				BackgroundTransparency = 1,
 
-				Image = "rbxassetid://16089599792",
+				Image = icon,
 				ImageColor3 = Colors.textMuted,
 			}),
 
 			create("TextButton")({
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
+				Text = "",
 
 				MouseEnter = function()
 					hovered(true)
@@ -59,13 +66,17 @@ function Button.new(name, callback)
 					hovered(false)
 				end,
 
-				Activated = callback,
+				Activated = function()
+					if callback then
+						callback()
+					end
+				end,
 			}),
 		})
 	end
 
-	function button:Set(newName)
-		name(newName)
+	function button:SetIcon(newIcon)
+		icon(Icons.resolve(newIcon) or "")
 	end
 
 	return button

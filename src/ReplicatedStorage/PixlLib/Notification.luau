@@ -1,5 +1,6 @@
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Icons = require("./Icons")
 
 local create = vide.create
 local spring = vide.spring
@@ -69,7 +70,7 @@ function Notification.new(config, present)
 				create("ImageLabel")({
 					Size = UDim2.fromOffset(32, 32), -- fixed, square; no scale coupling
 					BackgroundTransparency = 1,
-					Image = "rbxassetid://15642579187",
+					Image = Icons.resolve(config.Icon) or Icons.resolve("bell"),
 					ImageColor3 = Colors.textPrimary,
 					ImageTransparency = transparency,
 				}),

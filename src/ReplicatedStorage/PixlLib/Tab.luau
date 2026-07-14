@@ -1,10 +1,13 @@
 local vide = require("./Packages/vide")
+
 local Button = require("./Button")
 local Divider = require("./Divider")
 local Dropdown = require("./Dropdown")
 local InputBox = require("./InputBox")
+local Keybind = require("./Keybind")
 local Label = require("./Label")
 local Paragraph = require("./Paragraph")
+local Section = require("./Section")
 local Slider = require("./Slider")
 local Toggle = require("./Toggle")
 
@@ -12,57 +15,92 @@ local source = vide.source
 
 local Tab = {}
 
-local function addChild(self, handle)
-	local new = table.clone(self.children())
-	table.insert(new, handle)
-	self.children(new)
-
-	if handle.flag then
-		self.flags[handle.flag] = handle
-	end
-
-	return handle
-end
-
-function Tab.new(name, image, flags, onChanged)
+function Tab.new(name, icon, flags, onChanged)
 	local tab = {
 		name = name,
-		image = image,
+		icon = icon,
 		flags = flags,
 		onChanged = onChanged,
 		children = source({}),
 	}
 
-	function tab:CreateButton(config)
-		return addChild(self, Button.new(config.Name, config.Callback))
+	-- Every Create* funnels through here: the element goes into the tab's child list (which
+	-- vide renders), into the flag registry if it carries a Flag, and gets handed the way
+	-- back out again so :Destroy() can remove it.
+	local function addChild(handle)
+		local new = table.clone(tab.children())
+		table.insert(new, handle)
+		tab.children(new)
+
+		if handle.flag then
+			if flags[handle.flag] then
+				warn(`[PixlLib] duplicate Flag "{handle.flag}" - the config will only keep one of them`)
+			end
+			flags[handle.flag] = handle
+		end
+
+		handle._remove = function()
+			local remaining = {}
+			for _, child in tab.children() do
+				if child ~= handle then
+					table.insert(remaining, child)
+				end
+			end
+			tab.children(remaining)
+
+			if handle.flag and flags[handle.flag] == handle then
+				flags[handle.flag] = nil
+			end
+		end
+
+		return handle
 	end
 
-	function tab:CreateLabel(name)
-		return addChild(self, Label.new(name))
+	function tab:CreateButton(config)
+		return addChild(Button.new(config))
+	end
+
+	function tab:CreateLabel(config)
+		-- Historically the text was positional: CreateLabel("Text")
+		if type(config) == "string" then
+			config = { Name = config }
+		end
+		return addChild(Label.new(config))
+	end
+
+	function tab:CreateSection(config)
+		if type(config) == "string" then
+			config = { Name = config }
+		end
+		return addChild(Section.new(config))
 	end
 
 	function tab:CreateDivider()
-		return addChild(self, Divider.new())
+		return addChild(Divider.new({}))
 	end
 
 	function tab:CreateParagraph(config)
-		return addChild(self, Paragraph.new(config.Title, config.Content))
+		return addChild(Paragraph.new(config))
 	end
 
 	function tab:CreateToggle(config)
-		return addChild(self, Toggle.new(config.Name, config.CurrentValue, config.Flag, config.Callback, self.onChanged))
+		return addChild(Toggle.new(config, onChanged))
 	end
 
 	function tab:CreateSlider(config)
-		return addChild(self, Slider.new(config.Name, config.Suffix, config.Range, config.Increment, config.CurrentValue, config.Flag, config.Callback, self.onChanged))
+		return addChild(Slider.new(config, onChanged))
 	end
 
 	function tab:CreateInput(config)
-		return addChild(self, InputBox.new(config.Name, config.IsNumber, config.CurrentValue, config.Placeholder, config.Flag, config.Callback, self.onChanged))
+		return addChild(InputBox.new(config, onChanged))
 	end
 
 	function tab:CreateDropdown(config)
-		return addChild(self, Dropdown.new(config.Name, config.Options, config.MultipleOptions, config.Flag, config.Callback, self.onChanged))
+		return addChild(Dropdown.new(config, onChanged))
+	end
+
+	function tab:CreateKeybind(config)
+		return addChild(Keybind.new(config, onChanged))
 	end
 
 	return tab

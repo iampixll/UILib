@@ -1,5 +1,6 @@
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
@@ -9,17 +10,11 @@ local changed = vide.changed
 
 local Dropdown = {}
 
-function Dropdown.new(name, options, multiple, flag, callback, onChanged)
-	multiple = if multiple == nil then true else multiple
+function Dropdown.new(config, onChanged)
+	local multiple = if config.MultipleOptions == nil then true else config.MultipleOptions
+	local callback = config.Callback
 
-	local dropdown = {}
-
-	dropdown.flag = flag
-
-	name = source(name)
-
-	local optionList = source(options or {})
-
+	local optionList = source(config.Options or {})
 	local selected = source({})
 
 	local function toArray(set)
@@ -27,17 +22,49 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 		for name in set do
 			table.insert(arr, name)
 		end
+		table.sort(arr) -- stable output: :Get() and the saved config keep one order
 		return arr
 	end
 
-	local function setSelected(newSet, fireCallback)
+	local function setSelected(newSet, fire)
 		selected(newSet)
-		if fireCallback and callback then
-			callback(toArray(newSet))
+
+		if fire then
+			if callback then
+				callback(toArray(newSet))
+			end
+			if onChanged then
+				onChanged()
+			end
 		end
-		if fireCallback and onChanged then
-			onChanged()
-		end
+	end
+
+	local dropdown = Element.new("Dropdown", config, {
+		get = function()
+			return toArray(selected())
+		end,
+
+		set = function(options, fire)
+			local new = {}
+
+			-- Accept a bare string as well as a list; a single-select dropdown restored from
+			-- a config is the obvious case where one value shows up on its own.
+			if type(options) == "string" then
+				options = { options }
+			end
+
+			for _, name in options or {} do
+				new[name] = true
+			end
+
+			setSelected(new, fire)
+		end,
+	})
+
+	local name = dropdown.name
+
+	if config.CurrentOption then
+		dropdown:SetSilent(config.CurrentOption)
 	end
 
 	function dropdown:render()
@@ -89,6 +116,7 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 		local searchBgColor = spring(function() -- mirrors the option rows' / All button's hover
 			return if searchHovered() then Colors.surfaceHover else Colors.surface
 		end, 0.3)
+
 		return create("Frame")({
 			-- one frame, one animated height: header (60) + panel; clips the scroll frame as it grows/shrinks
 			Size = function()
@@ -96,6 +124,7 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 			end,
 			BackgroundColor3 = Colors.bg, -- fixed dark backdrop the options rest on
 			ClipsDescendants = true,
+			Visible = dropdown.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -135,7 +164,7 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 							count += 1
 						end
 
-						if count == #optionList() then
+						if count > 0 and count == #optionList() then
 							return "All selected"
 						elseif count > 0 then
 							return count .. " selected"
@@ -333,17 +362,17 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 				indexes(function()
 					local query = searchText():lower()
 					local matches = {}
-					for _, name in optionList() do
-						if string.find(name:lower(), query, 1, true) then
-							table.insert(matches, name)
+					for _, optionName in optionList() do
+						if string.find(optionName:lower(), query, 1, true) then
+							table.insert(matches, optionName)
 						end
 					end
 
 					return matches
 				end, function(option, i)
-					local hovered = source(false)
-					local bgColor = spring(function() -- rests on surface over the dark backdrop, hovers one step up
-						return if hovered() then Colors.surfaceHover else Colors.surface
+					local optionHovered = source(false)
+					local optionBg = spring(function() -- rests on surface over the dark backdrop, hovers one step up
+						return if optionHovered() then Colors.surfaceHover else Colors.surface
 					end, 0.3)
 
 					local boxColor = spring(function() -- inset checkbox, fills with accent when checked
@@ -357,7 +386,7 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 					return create("Frame")({
 						Size = UDim2.new(0.98, 0, 0, 60),
 						LayoutOrder = i + 1,
-						BackgroundColor3 = bgColor,
+						BackgroundColor3 = optionBg,
 
 						create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -402,10 +431,10 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 							Text = "",
 
 							MouseEnter = function()
-								hovered(true)
+								optionHovered(true)
 							end,
 							MouseLeave = function()
-								hovered(false)
+								optionHovered(false)
 							end,
 							Activated = function()
 								if multiple then
@@ -427,16 +456,38 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 		})
 	end
 
-	function dropdown:Get()
-		return toArray(selected())
+	-- Swap the option list at runtime. This is what you need when the options are not known
+	-- when the UI is built - a game directory that is still loading, a list that depends on
+	-- what the player owns. Selected options that survive the swap stay selected; the rest
+	-- are dropped, because keeping a selection the list no longer offers means :Get() returns
+	-- something the user cannot see or undo.
+	function dropdown:Refresh(options: { string })
+		optionList(options or {})
+
+		local kept = {}
+		local dropped = false
+
+		for _, optionName in options or {} do
+			if selected()[optionName] then
+				kept[optionName] = true
+			end
+		end
+
+		for optionName in selected() do
+			if not kept[optionName] then
+				dropped = true
+				break
+			end
+		end
+
+		if dropped then
+			-- Silent: the option vanished from the game, the user did not deselect it
+			setSelected(kept, false)
+		end
 	end
 
-	function dropdown:Set(options)
-		local new = {}
-		for _, name in options do
-			new[name] = true
-		end
-		setSelected(new, false)
+	function dropdown:GetOptions(): { string }
+		return table.clone(optionList())
 	end
 
 	return dropdown

@@ -18,7 +18,31 @@ local source = vide.source
 
 local PixlLib = {}
 
+-- Every element that carries a Flag, keyed by it. This is what the config reads and writes,
+-- and what you index to reach an element from anywhere: PixlLib.Flags.AutoFarm:Set(true)
 PixlLib.Flags = {}
+
+-- Written to the config file so a future format change can migrate instead of guessing
+local CONFIG_VERSION = 1
+
+-- Executors expose these as globals; Studio does not, in which case they read as nil.
+-- Everything file-related goes through this table, so exactly one place knows whether saving
+-- is possible at all - the rest of the library never has to ask.
+local fs = {
+	read = readfile,
+	write = writefile,
+	isFile = isfile,
+	isFolder = isfolder,
+	makeFolder = makefolder,
+}
+
+local function canWrite(): boolean
+	return fs.write ~= nil and fs.isFolder ~= nil and fs.makeFolder ~= nil
+end
+
+local function canRead(): boolean
+	return fs.read ~= nil and fs.isFile ~= nil
+end
 
 local function getGuiParent()
 	if gethui then
@@ -28,57 +52,118 @@ local function getGuiParent()
 	return Players.LocalPlayer:WaitForChild("PlayerGui")
 end
 
+local function configPath(config): string
+	return `{config.FolderName}/{config.FileName}.json`
+end
+
+-------------------------------------------------------------------------------
+-- Configuration
+-------------------------------------------------------------------------------
+
 function PixlLib:Save()
-	if not self.config or not self.config.Saving then
+	local config = self.config
+	if not (config and config.Saving) then
 		return
 	end
 
-	local data = {}
+	local values = {}
 	for flag, element in self.Flags do
-		data[flag] = element:Get()
+		values[flag] = element:Get()
 	end
 
-	local json = HttpService:JSONEncode(data)
+	local payload = {
+		version = CONFIG_VERSION,
+		values = values,
+	}
 
-	if writefile then
-		local folder = self.config.FolderName
-		if not isfolder(folder) then
-			makefolder(folder)
+	if not canWrite() then
+		return -- Studio, or an executor without file access: nothing to do, and nothing broken
+	end
+
+	local ok, err = pcall(function()
+		if not fs.isFolder(config.FolderName) then
+			fs.makeFolder(config.FolderName)
 		end
-		writefile(folder .. "/" .. self.config.FileName .. ".json", json)
-	else
-		print("PixlLib save (no writefile):", json)
+		fs.write(configPath(config), HttpService:JSONEncode(payload))
+	end)
+
+	if not ok then
+		warn(`[PixlLib] could not save config: {err}`)
 	end
+end
+
+-- Saving on every keystroke of a text box (or every step of a slider drag) would hammer the
+-- disk. Collapse the writes: the last change within the window wins.
+local SAVE_DEBOUNCE = 0.5
+local savePending = false
+
+local function requestSave()
+	if savePending then
+		return
+	end
+	savePending = true
+
+	task.delay(SAVE_DEBOUNCE, function()
+		savePending = false
+		PixlLib:Save()
+	end)
 end
 
 function PixlLib:Load()
-	if not self.config or not self.config.Loading then
+	local config = self.config
+	if not (config and config.Loading) then
 		return
 	end
 
-	if not readfile then
-		print("PixlLib: readfile unavailable, skipping load") -- Studio: no file API
-		return
+	if not canRead() then
+		return -- Studio: no file API, so there is nothing saved to restore
 	end
 
-	local path = self.config.FolderName .. "/" .. self.config.FileName .. ".json"
-	if not isfile(path) then
-		return -- nothing saved yet, nothing to load
-	end
+	local path = configPath(config)
 
-	local data = HttpService:JSONDecode(readfile(path)) -- string -> table
-
-	for flag, value in data do
-		local element = self.Flags[flag]
-		if element then
-			element:Set(value) -- silent: no callback, no onChanged
+	local ok, decoded = pcall(function()
+		if not fs.isFile(path) then
+			return nil
 		end
+		return HttpService:JSONDecode(fs.read(path))
+	end)
+
+	if not ok then
+		warn(`[PixlLib] config at {path} is unreadable, ignoring it: {decoded}`)
+		return
+	end
+
+	if not decoded then
+		return -- nothing saved yet
+	end
+
+	-- v1 wraps the values; anything older was a flat map of flag -> value
+	local values = decoded.values or decoded
+
+	-- Whether restoring a value should run the element's callback. On by default, so a saved
+	-- toggle actually turns its feature back on - a config that restores the switch but not
+	-- the thing behind it is a lie. Set FireCallbacksOnLoad = false when the callbacks do
+	-- something you would not want to happen unattended at launch.
+	local fire = config.FireCallbacksOnLoad ~= false
+
+	for flag, value in values do
+		local element = self.Flags[flag]
+
+		if element then
+			if fire then
+				element:Set(value)
+			else
+				element:SetSilent(value)
+			end
+		end
+		-- A flag in the file with no element is not an error: the script may simply have
+		-- dropped that feature since. It is kept in `values` and rewritten on the next save.
 	end
 end
 
-local function onChanged()
-	PixlLib:Save()
-end
+-------------------------------------------------------------------------------
+-- Notifications
+-------------------------------------------------------------------------------
 
 local notifications = source({})
 local nextId = 0
@@ -97,15 +182,25 @@ function PixlLib:Notify(config)
 	new[id] = {
 		Title = config.Title,
 		Content = config.Content,
-		Image = config.Image,
+		Icon = config.Icon,
 	}
 	notifications(new) -- triggers the renderer
 
 	local duration = config.Duration or 6
 	task.delay(duration, removeById, id)
+
+	return function()
+		removeById(id) -- dismiss it early
+	end
 end
 
+-------------------------------------------------------------------------------
+-- Window
+-------------------------------------------------------------------------------
+
 function PixlLib:CreateWindow(config)
+	-- Running the script twice would otherwise leave the old interface behind, still
+	-- listening to input and still holding its feature loops.
 	local env = getgenv and getgenv() or {}
 	if env.PixlLibUnmount then
 		env.PixlLibUnmount()
@@ -116,20 +211,27 @@ function PixlLib:CreateWindow(config)
 
 	local window
 	local destroyScope = vide.mount(function()
-		window = Window.new(config, notifications, self.Flags, onChanged)
+		window = Window.new(config, notifications, self.Flags, requestSave)
 		return window.node
 	end, getGuiParent())
 
+	self._window = window
 	self._unmount = function()
 		destroyScope()
 		if window.node then
 			window.node:Destroy()
 		end
+
+		self._window = nil
+		self.Flags = {}
+		env.PixlLibUnmount = nil
 	end
 
 	env.PixlLibUnmount = self._unmount
 
 	if self.config and self.config.Loading then
+		-- Deferred so the caller can finish building its tabs first: elements that do not
+		-- exist yet cannot be restored.
 		task.defer(function()
 			self:Load()
 		end)
@@ -138,11 +240,37 @@ function PixlLib:CreateWindow(config)
 	return window
 end
 
+-- Tears the interface down for good, after writing any pending config change. Everything
+-- vide created goes with the scope, so no connections are left running.
+function PixlLib:Destroy()
+	if savePending then
+		savePending = false
+		self:Save()
+	end
+
+	if self._unmount then
+		self._unmount()
+		self._unmount = nil
+	end
+end
+
+function PixlLib:SetVisibility(visible: boolean)
+	if self._window then
+		self._window:SetVisibility(visible)
+	end
+end
+
+function PixlLib:IsVisible(): boolean
+	return self._window ~= nil and self._window:IsVisible()
+end
+
 return PixlLib
 
 end)() end,
     function()local wax,script,require=ImportGlobals(3)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
+local Icons = require("./Icons")
 
 local create = vide.create
 local source = vide.source
@@ -150,10 +278,13 @@ local spring = vide.spring
 
 local Button = {}
 
-function Button.new(name, callback)
-	local button = {}
+function Button.new(config)
+	local button = Element.new("Button", config)
 
-	name = source(name)
+	local name = button.name
+	local icon = source(Icons.resolve(config.Icon) or Icons.resolve("fingerprint"))
+
+	local callback = config.Callback
 
 	function button:render()
 		local hovered = source(false)
@@ -164,6 +295,7 @@ function Button.new(name, callback)
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 44),
 			BackgroundColor3 = bgColor,
+			Visible = button.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -187,13 +319,14 @@ function Button.new(name, callback)
 				Position = UDim2.new(1, -20, 0.5, 0),
 				BackgroundTransparency = 1,
 
-				Image = "rbxassetid://16089599792",
+				Image = icon,
 				ImageColor3 = Colors.textMuted,
 			}),
 
 			create("TextButton")({
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
+				Text = "",
 
 				MouseEnter = function()
 					hovered(true)
@@ -202,13 +335,17 @@ function Button.new(name, callback)
 					hovered(false)
 				end,
 
-				Activated = callback,
+				Activated = function()
+					if callback then
+						callback()
+					end
+				end,
 			}),
 		})
 	end
 
-	function button:Set(newName)
-		name(newName)
+	function button:SetIcon(newIcon)
+		icon(Icons.resolve(newIcon) or "")
 	end
 
 	return button
@@ -239,18 +376,31 @@ end)() end,
 
 end)() end,
     function()local wax,script,require=ImportGlobals(5)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 
 local Divider = {}
 
-function Divider.new()
-	local divider = {}
+-- A drawn line, not just empty space: it is the thing you reach for to say "the group above
+-- ended here". Blank spacers cannot do that, they just look like a layout accident.
+function Divider.new(config)
+	local divider = Element.new("Divider", config or {})
 
 	function divider:render()
 		return create("Frame")({
-			Size = UDim2.new(0.98, 0, 0, 5),
+			Size = UDim2.new(0.98, 0, 0, 9), -- the line plus breathing room above and below
 			BackgroundTransparency = 1,
+			Visible = divider.visible,
+
+			create("Frame")({
+				Size = UDim2.new(1, 0, 0, 1),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				BackgroundColor3 = Colors.stroke,
+				BorderSizePixel = 0,
+			}),
 		})
 	end
 
@@ -262,6 +412,7 @@ return Divider
 end)() end,
     function()local wax,script,require=ImportGlobals(6)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
@@ -271,17 +422,11 @@ local changed = vide.changed
 
 local Dropdown = {}
 
-function Dropdown.new(name, options, multiple, flag, callback, onChanged)
-	multiple = if multiple == nil then true else multiple
+function Dropdown.new(config, onChanged)
+	local multiple = if config.MultipleOptions == nil then true else config.MultipleOptions
+	local callback = config.Callback
 
-	local dropdown = {}
-
-	dropdown.flag = flag
-
-	name = source(name)
-
-	local optionList = source(options or {})
-
+	local optionList = source(config.Options or {})
 	local selected = source({})
 
 	local function toArray(set)
@@ -289,17 +434,49 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 		for name in set do
 			table.insert(arr, name)
 		end
+		table.sort(arr) -- stable output: :Get() and the saved config keep one order
 		return arr
 	end
 
-	local function setSelected(newSet, fireCallback)
+	local function setSelected(newSet, fire)
 		selected(newSet)
-		if fireCallback and callback then
-			callback(toArray(newSet))
+
+		if fire then
+			if callback then
+				callback(toArray(newSet))
+			end
+			if onChanged then
+				onChanged()
+			end
 		end
-		if fireCallback and onChanged then
-			onChanged()
-		end
+	end
+
+	local dropdown = Element.new("Dropdown", config, {
+		get = function()
+			return toArray(selected())
+		end,
+
+		set = function(options, fire)
+			local new = {}
+
+			-- Accept a bare string as well as a list; a single-select dropdown restored from
+			-- a config is the obvious case where one value shows up on its own.
+			if type(options) == "string" then
+				options = { options }
+			end
+
+			for _, name in options or {} do
+				new[name] = true
+			end
+
+			setSelected(new, fire)
+		end,
+	})
+
+	local name = dropdown.name
+
+	if config.CurrentOption then
+		dropdown:SetSilent(config.CurrentOption)
 	end
 
 	function dropdown:render()
@@ -351,6 +528,7 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 		local searchBgColor = spring(function() -- mirrors the option rows' / All button's hover
 			return if searchHovered() then Colors.surfaceHover else Colors.surface
 		end, 0.3)
+
 		return create("Frame")({
 			-- one frame, one animated height: header (60) + panel; clips the scroll frame as it grows/shrinks
 			Size = function()
@@ -358,6 +536,7 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 			end,
 			BackgroundColor3 = Colors.bg, -- fixed dark backdrop the options rest on
 			ClipsDescendants = true,
+			Visible = dropdown.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -397,7 +576,7 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 							count += 1
 						end
 
-						if count == #optionList() then
+						if count > 0 and count == #optionList() then
 							return "All selected"
 						elseif count > 0 then
 							return count .. " selected"
@@ -595,17 +774,17 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 				indexes(function()
 					local query = searchText():lower()
 					local matches = {}
-					for _, name in optionList() do
-						if string.find(name:lower(), query, 1, true) then
-							table.insert(matches, name)
+					for _, optionName in optionList() do
+						if string.find(optionName:lower(), query, 1, true) then
+							table.insert(matches, optionName)
 						end
 					end
 
 					return matches
 				end, function(option, i)
-					local hovered = source(false)
-					local bgColor = spring(function() -- rests on surface over the dark backdrop, hovers one step up
-						return if hovered() then Colors.surfaceHover else Colors.surface
+					local optionHovered = source(false)
+					local optionBg = spring(function() -- rests on surface over the dark backdrop, hovers one step up
+						return if optionHovered() then Colors.surfaceHover else Colors.surface
 					end, 0.3)
 
 					local boxColor = spring(function() -- inset checkbox, fills with accent when checked
@@ -619,7 +798,7 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 					return create("Frame")({
 						Size = UDim2.new(0.98, 0, 0, 60),
 						LayoutOrder = i + 1,
-						BackgroundColor3 = bgColor,
+						BackgroundColor3 = optionBg,
 
 						create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -664,10 +843,10 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 							Text = "",
 
 							MouseEnter = function()
-								hovered(true)
+								optionHovered(true)
 							end,
 							MouseLeave = function()
-								hovered(false)
+								optionHovered(false)
 							end,
 							Activated = function()
 								if multiple then
@@ -689,16 +868,38 @@ function Dropdown.new(name, options, multiple, flag, callback, onChanged)
 		})
 	end
 
-	function dropdown:Get()
-		return toArray(selected())
+	-- Swap the option list at runtime. This is what you need when the options are not known
+	-- when the UI is built - a game directory that is still loading, a list that depends on
+	-- what the player owns. Selected options that survive the swap stay selected; the rest
+	-- are dropped, because keeping a selection the list no longer offers means :Get() returns
+	-- something the user cannot see or undo.
+	function dropdown:Refresh(options: { string })
+		optionList(options or {})
+
+		local kept = {}
+		local dropped = false
+
+		for _, optionName in options or {} do
+			if selected()[optionName] then
+				kept[optionName] = true
+			end
+		end
+
+		for optionName in selected() do
+			if not kept[optionName] then
+				dropped = true
+				break
+			end
+		end
+
+		if dropped then
+			-- Silent: the option vanished from the game, the user did not deselect it
+			setSelected(kept, false)
+		end
 	end
 
-	function dropdown:Set(options)
-		local new = {}
-		for _, name in options do
-			new[name] = true
-		end
-		setSelected(new, false)
+	function dropdown:GetOptions(): { string }
+		return table.clone(optionList())
 	end
 
 	return dropdown
@@ -708,7 +909,185 @@ return Dropdown
 
 end)() end,
     function()local wax,script,require=ImportGlobals(7)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+
+local source = vide.source
+
+-- The shell every element shares. It owns the parts that are the same everywhere - the
+-- handle you get back from Tab:CreateX, its name, whether it is visible, how it is removed
+-- again - so the element files below only describe what makes them different: their value
+-- and how they look.
+--
+-- Value semantics (Toggle, Slider, Input, Dropdown, Keybind):
+--   :Set(value)        applies it AND fires the callback, like a user interaction would
+--   :SetSilent(value)  applies it without firing - used when restoring a saved config
+--   :Get()             reads it back
+--
+-- Display elements (Button, Label, Section, Paragraph, Divider) hold no value, so :Set falls
+-- back to their text - the only thing they *have*. Button:Set("Go") therefore keeps working,
+-- and :Set never silently does nothing.
+local Element = {}
+Element.__index = Element
+
+export type Handle = {
+	Type: string,
+	Flag: string?,
+
+	Get: (Handle) -> any,
+	Set: (Handle, any) -> (),
+	SetSilent: (Handle, any) -> (),
+	SetName: (Handle, string) -> (),
+	SetVisible: (Handle, boolean) -> (),
+	Destroy: (Handle) -> (),
+}
+
+-- kind:   "Toggle", "Slider", ... - what the element is, mirrored on the handle as .Type
+-- config: the table the user passed to Tab:CreateX
+-- impl:   { get = function() -> value, set = function(value, fire: boolean) }
+--         `set` is what actually applies a value; `fire` tells it whether to run the
+--         user's callback. Omit both for a display-only element.
+function Element.new(kind: string, config, impl)
+	local self = setmetatable({}, Element)
+
+	self.Type = kind
+	self.Flag = config.Flag
+
+	-- Tab and the config store index elements by `.flag`; keep the lowercase field as the
+	-- one they read so there is a single spelling in the internals.
+	self.flag = config.Flag
+
+	self.name = source(config.Name or "")
+	self.visible = source(true)
+
+	-- No value of its own -> its text stands in for one, so Button:Set("Go") relabels it
+	self._get = impl and impl.get or self.name
+	self._set = impl and impl.set or function(text)
+		self.name(tostring(text))
+	end
+
+	-- Filled in by Tab:addChild, which is the only thing that can take us out of the tree
+	self._remove = nil
+
+	return self
+end
+
+function Element:Get(): any
+	return self._get()
+end
+
+-- Applies the value and fires the callback, the same way clicking the element would. This is
+-- what you want for "turn this feature on from code".
+function Element:Set(value)
+	self._set(value, true)
+end
+
+-- Applies the value without firing the callback. Restoring a saved config uses this when
+-- Configuration.FireCallbacksOnLoad is off, so loading a file cannot start features behind
+-- the user's back.
+function Element:SetSilent(value)
+	self._set(value, false)
+end
+
+function Element:SetName(name: string)
+	self.name(name)
+end
+
+function Element:SetVisible(visible: boolean)
+	self.visible(visible)
+end
+
+function Element:IsVisible(): boolean
+	return self.visible()
+end
+
+-- Removes the element from its tab. Vide tears the rendered instances down with the scope,
+-- and any connection the element registered via vide.cleanup goes with it.
+function Element:Destroy()
+	if self._remove then
+		self._remove()
+		self._remove = nil
+	end
+end
+
+return Element
+
+end)() end,
+    function()local wax,script,require=ImportGlobals(8)local ImportGlobals return (function(...)-- Icons by name, so callers never have to paste an asset id.
+--
+-- Rayfield solves this by downloading Lucide's ~200 KB sprite atlas at runtime and slicing it
+-- with ImageRectOffset/ImageRectSize. We keep the curated set below instead: they are whole
+-- assets, need no slicing, and cost nothing to ship. Anything not in the list can still be
+-- passed straight through as an asset id or an rbxassetid:// string, so nothing is locked
+-- away behind the table.
+local Icons = {}
+
+Icons.Named = {
+	-- topbar
+	minimize = 71627683074088,
+	close = 91413233063028,
+	logo = 120561115194230,
+
+	-- tabs
+	settings = 87867412432006,
+	egg = 15637367451,
+	webhook = 122219359034661,
+	automatic = 15637369009,
+	minigames = 15637376993,
+	optimization = 94231924171549,
+	bell = 15642579187,
+	daycare = 106673690772800,
+	mailbox = 15637375511,
+	house = 15637376279,
+	misc = 15637356511,
+	farm = 15637359494,
+	farming = 84837573349427,
+	player = 15637355840,
+	window = 16259403210,
+	quest = 15637379637,
+	fishing = 91895975011561,
+	shop = 15637380284,
+
+	-- misc
+	lock = 126141499544212,
+	fingerprint = 16089599792,
+	chevron = 16093555964,
+}
+
+-- Turns whatever a caller passed into an Image string.
+--   "farming"                -> a name from the table above
+--   15637359494              -> a raw asset id
+--   "rbxassetid://123"       -> passed through untouched (also rbxthumb://, rbxasset://)
+--   nil / unknown name       -> nil, so the caller can decide on its own fallback
+function Icons.resolve(icon: (string | number)?): string?
+	if icon == nil then
+		return nil
+	end
+
+	if type(icon) == "number" then
+		return "rbxassetid://" .. icon
+	end
+
+	if type(icon) == "string" then
+		if string.match(icon, "^rbx%a+://") then
+			return icon
+		end
+
+		local id = Icons.Named[string.lower(icon)]
+		if id then
+			return "rbxassetid://" .. id
+		end
+
+		warn(`[PixlLib] unknown icon "{icon}" - pass an asset id, or add it to Icons.Named`)
+	end
+
+	return nil
+end
+
+return Icons
+
+end)() end,
+    function()local wax,script,require=ImportGlobals(9)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
@@ -716,26 +1095,42 @@ local spring = vide.spring
 
 local InputBox = {}
 
-function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback, onChanged)
-	local input = {}
+function InputBox.new(config, onChanged)
+	local isNumber = config.IsNumber
+	local callback = config.Callback
 
-	input.flag = flag
+	local value = source(config.CurrentValue or "") -- committed value, single source of truth
 
-	name = source(name)
+	local function setValue(newValue, fire)
+		if isNumber then
+			newValue = tonumber(newValue)
+			if not newValue then
+				return -- a number box never holds a non-number, not even from a config file
+			end
+		end
 
-	local value = source(currentValue or "") -- committed value, single source of truth
+		if newValue == value() then
+			return
+		end
 
-	local function setValue(newValue, fireCallback)
-		if newValue ~= value() then
-			value(newValue)
-			if fireCallback and callback then
+		value(newValue)
+
+		if fire then
+			if callback then
 				callback(newValue)
 			end
-			if fireCallback and onChanged then
+			if onChanged then
 				onChanged()
 			end
 		end
 	end
+
+	local input = Element.new("Input", config, {
+		get = value,
+		set = setValue,
+	})
+
+	local name = input.name
 
 	function input:render()
 		local focused = source(false)
@@ -765,8 +1160,10 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback,
 
 			-- Text follows the committed value; vide only rewrites it on commit/:Set,
 			-- never mid-typing -> no cursor jumps
-			Text = value,
-			PlaceholderText = placeholder or "",
+			Text = function()
+				return tostring(value())
+			end,
+			PlaceholderText = config.Placeholder or "",
 			PlaceholderColor3 = Colors.textMuted,
 
 			TextColor3 = textColor,
@@ -780,21 +1177,20 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback,
 
 			FocusLost = function() -- (enterPressed, inputObject)
 				focused(false)
-				if isNumber then
-					local num = tonumber(box.Text)
-					if num then
-						setValue(num, true) -- valid number, commit + fire
-					else
-						box.Text = tostring(value()) -- reject: snap box back to last good value
-					end
-				else
-					setValue(box.Text, true)
+
+				if isNumber and not tonumber(box.Text) then
+					box.Text = tostring(value()) -- reject: snap box back to last good value
+					return
 				end
+
+				setValue(box.Text, true)
 			end,
 		})
+
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 60),
 			BackgroundColor3 = bgColor,
+			Visible = input.visible,
 
 			MouseEnter = function()
 				hovered(true)
@@ -841,40 +1237,233 @@ function InputBox.new(name, isNumber, currentValue, placeholder, flag, callback,
 		})
 	end
 
-	function input:Get()
-		return value()
-	end
-
-	function input:Set(newValue)
-		setValue(newValue, false) -- silent, consistent with Toggle/Slider
-	end
-
 	return input
 end
 
 return InputBox
 
 end)() end,
-    function()local wax,script,require=ImportGlobals(8)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+    function()local wax,script,require=ImportGlobals(10)local ImportGlobals return (function(...)local UserInputService = game:GetService("UserInputService")
+
+local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
+local spring = vide.spring
+
+local Keybind = {}
+
+-- How many keybinds are currently waiting for their new key. While that is above zero the
+-- next keypress belongs to the rebind and to nothing else - without this, rebinding onto the
+-- window's own toggle key would minimise the window in the same breath.
+local capturing = 0
+
+function Keybind.IsCapturing(): boolean
+	return capturing > 0
+end
+
+-- Binds a key to a callback, and lets the user rebind it by clicking the element and pressing
+-- the new key. The stored value is the KeyCode's *name* ("F", "LeftAlt"), because that is what
+-- survives a round trip through the JSON config - an EnumItem does not.
+--
+-- Two behaviours, like Rayfield:
+--   HoldToInteract = false (default) -> callback fires once on press
+--   HoldToInteract = true            -> callback fires with true on press and false on release
+function Keybind.new(config, onChanged)
+	local callback = config.Callback
+	local holdToInteract = config.HoldToInteract or false
+
+	local key = source(config.CurrentKeybind or "K")
+	local listening = source(false) -- waiting for the user to press the new key
+	local held = source(false)
+
+	local function setListening(value: boolean)
+		if value == listening() then
+			return
+		end
+
+		listening(value)
+		capturing += if value then 1 else -1
+	end
+
+	local function setValue(newKey, fire)
+		if type(newKey) == "EnumItem" then
+			newKey = newKey.Name
+		end
+
+		if type(newKey) ~= "string" or not Enum.KeyCode[newKey] then
+			warn(`[PixlLib] "{tostring(newKey)}" is not a KeyCode name, keybind unchanged`)
+			return
+		end
+
+		if newKey == key() then
+			return
+		end
+
+		key(newKey)
+
+		if fire and onChanged then
+			onChanged()
+		end
+	end
+
+	local keybind = Element.new("Keybind", config, {
+		get = key,
+		set = setValue,
+	})
+
+	local name = keybind.name
+
+	function keybind:render()
+		local hovered = source(false)
+
+		local bgColor = spring(function()
+			return if hovered() then Colors.surfaceHover else Colors.surface
+		end, 0.3)
+
+		local boxColor = spring(function() -- the key pill lights up while it waits for input
+			return if listening() then Colors.accent else Colors.bg
+		end, 0.2)
+
+		local beganConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+			if input.UserInputType ~= Enum.UserInputType.Keyboard then
+				return
+			end
+
+			-- Rebinding takes priority, and deliberately ignores gameProcessed: the user is
+			-- typing INTO our element, not into the game.
+			if listening() then
+				setListening(false)
+				setValue(input.KeyCode.Name, true)
+				return
+			end
+
+			if gameProcessed or input.KeyCode.Name ~= key() then
+				return
+			end
+
+			if holdToInteract then
+				held(true)
+				if callback then
+					callback(true)
+				end
+			elseif callback then
+				callback()
+			end
+		end)
+		vide.cleanup(beganConn)
+
+		local endedConn = UserInputService.InputEnded:Connect(function(input)
+			if not holdToInteract or input.UserInputType ~= Enum.UserInputType.Keyboard then
+				return
+			end
+
+			if input.KeyCode.Name == key() and held() then
+				held(false)
+				if callback then
+					callback(false)
+				end
+			end
+		end)
+		vide.cleanup(endedConn)
+
+		-- Destroying the element mid-rebind must not leave the capture lock stuck on
+		vide.cleanup(function()
+			setListening(false)
+		end)
+
+		return create("Frame")({
+			Size = UDim2.new(0.98, 0, 0, 60),
+			BackgroundColor3 = bgColor,
+			Visible = keybind.visible,
+
+			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+			create("TextLabel")({ -- name on the left
+				Size = UDim2.new(1, -140, 0.6, 0),
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 16, 0.5, 0),
+				BackgroundTransparency = 1,
+
+				Text = name,
+				TextColor3 = Colors.textPrimary,
+				TextSize = 22,
+				TextXAlignment = "Left",
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
+			}),
+
+			create("Frame")({ -- the key pill
+				Size = UDim2.fromOffset(96, 34),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -16, 0.5, 0),
+				BackgroundColor3 = boxColor,
+
+				create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+				create("UIStroke")({ Color = Colors.stroke, Thickness = 1.5 }),
+
+				create("TextLabel")({
+					Size = UDim2.fromScale(1, 1),
+					BackgroundTransparency = 1,
+
+					Text = function()
+						return if listening() then "..." else key()
+					end,
+					TextColor3 = Colors.textPrimary,
+					TextSize = 20,
+					TextTruncate = "AtEnd",
+					FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
+				}),
+			}),
+
+			create("TextButton")({
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Text = "",
+
+				MouseEnter = function()
+					hovered(true)
+				end,
+				MouseLeave = function()
+					hovered(false)
+				end,
+
+				Activated = function()
+					setListening(not listening()) -- click again to cancel
+				end,
+			}),
+		})
+	end
+
+	return keybind
+end
+
+return Keybind
+
+end)() end,
+    function()local wax,script,require=ImportGlobals(11)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+local Colors = require("./Colors")
+local Element = require("./Element")
+
+local create = vide.create
 
 local Label = {}
 
-function Label.new(name)
-	local label = {}
+function Label.new(config)
+	local label = Element.new("Label", config)
 
-	name = source(name)
+	local name = label.name
+	local color = config.Color or Colors.textPrimary
 
 	function label:render()
 		return create("TextLabel")({
 			Size = UDim2.new(0.98, 0, 0, 28),
 			BackgroundTransparency = 1,
+			Visible = label.visible,
 
 			Text = name,
-			TextColor3 = Colors.textPrimary,
+			TextColor3 = color,
 			TextSize = 24,
 			TextXAlignment = "Left",
 			TextYAlignment = "Bottom",
@@ -883,18 +1472,15 @@ function Label.new(name)
 		})
 	end
 
-	function label:Set(newName)
-		name(newName)
-	end
-
 	return label
 end
 
 return Label
 
 end)() end,
-    function()local wax,script,require=ImportGlobals(9)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+    function()local wax,script,require=ImportGlobals(12)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Icons = require("./Icons")
 
 local create = vide.create
 local spring = vide.spring
@@ -964,7 +1550,7 @@ function Notification.new(config, present)
 				create("ImageLabel")({
 					Size = UDim2.fromOffset(32, 32), -- fixed, square; no scale coupling
 					BackgroundTransparency = 1,
-					Image = "rbxassetid://15642579187",
+					Image = Icons.resolve(config.Icon) or Icons.resolve("bell"),
 					ImageColor3 = Colors.textPrimary,
 					ImageTransparency = transparency,
 				}),
@@ -1007,21 +1593,28 @@ end
 return Notification
 
 end)() end,
-    function()local wax,script,require=ImportGlobals(10)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+    function()local wax,script,require=ImportGlobals(13)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
+local source = vide.source
 
 local Paragraph = {}
 
-function Paragraph.new(title, content)
-	local paragraph = {}
+function Paragraph.new(config)
+	-- The paragraph's heading is the element name, so :SetName() retitles it like every
+	-- other element; the body gets its own source.
+	local paragraph = Element.new("Paragraph", { Name = config.Title })
+	local title = paragraph.name
+	local content = source(config.Content or "")
 
 	function paragraph:render()
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 0),
 			BackgroundColor3 = Colors.surface,
 			AutomaticSize = "Y",
+			Visible = paragraph.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -1065,16 +1658,79 @@ function Paragraph.new(title, content)
 		})
 	end
 
+	function paragraph:SetContent(newContent: string)
+		content(newContent)
+	end
+
 	return paragraph
 end
 
 return Paragraph
 
 end)() end,
-    function()local wax,script,require=ImportGlobals(11)local ImportGlobals return (function(...)local UserInputService = game:GetService("UserInputService")
+    function()local wax,script,require=ImportGlobals(14)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+local Colors = require("./Colors")
+local Element = require("./Element")
+
+local create = vide.create
+
+local Section = {}
+
+-- A heading that groups the elements under it. Where a Label is body text at full contrast,
+-- a Section is a quiet, small-caps-ish marker that the eye skims past until it needs it -
+-- muted colour, letter spacing, a rule to its right.
+function Section.new(config)
+	local section = Element.new("Section", config)
+	local name = section.name
+
+	function section:render()
+		return create("Frame")({
+			Size = UDim2.new(0.98, 0, 0, 30),
+			BackgroundTransparency = 1,
+			Visible = section.visible,
+
+			create("UIListLayout")({
+				FillDirection = "Horizontal",
+				VerticalAlignment = "Center",
+				Padding = UDim.new(0, 10),
+				SortOrder = "LayoutOrder",
+			}),
+
+			create("TextLabel")({
+				Size = UDim2.fromOffset(0, 20), -- X grows with the text
+				AutomaticSize = "X",
+				LayoutOrder = 1,
+				BackgroundTransparency = 1,
+
+				Text = name,
+				TextColor3 = Colors.textMuted,
+				TextSize = 18,
+				TextXAlignment = "Left",
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
+			}),
+
+			create("Frame")({ -- rule filling the rest of the row
+				Size = UDim2.new(1, 0, 0, 1),
+				LayoutOrder = 2,
+				BackgroundColor3 = Colors.stroke,
+				BorderSizePixel = 0,
+
+				create("UIFlexItem")({ FlexMode = "Fill" }),
+			}),
+		})
+	end
+
+	return section
+end
+
+return Section
+
+end)() end,
+    function()local wax,script,require=ImportGlobals(15)local ImportGlobals return (function(...)local UserInputService = game:GetService("UserInputService")
 
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
@@ -1082,27 +1738,53 @@ local spring = vide.spring
 
 local Slider = {}
 
-function Slider.new(name, suffix, range, increment, currentValue, flag, callback, onChanged)
-	local slider = {}
-	slider.flag = flag
+function Slider.new(config, onChanged)
+	local min, max = config.Range[1], config.Range[2]
+	local increment = config.Increment or 1
+	local suffix = config.Suffix
+	local callback = config.Callback
 
-	local min, max = range[1], range[2]
+	local value = source(math.clamp(config.CurrentValue or min, min, max))
 
-	name = source(name)
-	local value = source(currentValue)
+	local function snap(raw)
+		return math.clamp(math.round(raw / increment) * increment, min, max)
+	end
+
+	local function setValue(raw, fire)
+		raw = tonumber(raw)
+		if not raw then
+			return
+		end
+
+		local snapped = snap(raw)
+		if snapped == value() then
+			return
+		end
+
+		value(snapped)
+
+		if fire and callback then
+			callback(snapped)
+		end
+	end
+
+	local slider = Element.new("Slider", config, {
+		get = value,
+		set = function(raw, fire)
+			setValue(raw, fire)
+
+			-- Dragging saves once on release (see below); a programmatic Set has no release,
+			-- so it has to persist itself.
+			if fire and onChanged then
+				onChanged()
+			end
+		end,
+	})
+
+	local name = slider.name
 
 	local function fraction()
 		return (value() - min) / (max - min)
-	end
-
-	local function setValue(newValue, fireCallback)
-		local snapped = math.clamp(math.round(newValue / increment) * increment, min, max)
-		if snapped ~= value() then
-			value(snapped)
-			if fireCallback and callback then
-				callback(snapped)
-			end
-		end
 	end
 
 	function slider:render()
@@ -1164,6 +1846,8 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 
 		local endConn = UserInputService.InputEnded:Connect(function(input)
 			if input.UserInputType == Enum.UserInputType.MouseButton1 then
+				-- Save once, on release: a drag walks through dozens of values and each one
+				-- would otherwise be written to disk.
 				if dragging() and onChanged then
 					onChanged()
 				end
@@ -1175,6 +1859,7 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 60),
 			BackgroundColor3 = bgColor,
+			Visible = slider.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -1229,12 +1914,12 @@ function Slider.new(name, suffix, range, increment, currentValue, flag, callback
 		})
 	end
 
-	function slider:Get()
-		return value()
-	end
-
-	function slider:Set(newValue)
-		setValue(newValue, false)
+	-- Retarget the slider without rebuilding it. The value is clamped into the new range, so
+	-- a slider that pointed past the new maximum lands on it rather than showing a value it
+	-- can no longer reach.
+	function slider:SetRange(newMin: number, newMax: number)
+		min, max = newMin, newMax
+		setValue(math.clamp(value(), min, max), false)
 	end
 
 	return slider
@@ -1243,13 +1928,16 @@ end
 return Slider
 
 end)() end,
-    function()local wax,script,require=ImportGlobals(12)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+    function()local wax,script,require=ImportGlobals(16)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+
 local Button = require("./Button")
 local Divider = require("./Divider")
 local Dropdown = require("./Dropdown")
 local InputBox = require("./InputBox")
+local Keybind = require("./Keybind")
 local Label = require("./Label")
 local Paragraph = require("./Paragraph")
+local Section = require("./Section")
 local Slider = require("./Slider")
 local Toggle = require("./Toggle")
 
@@ -1257,57 +1945,92 @@ local source = vide.source
 
 local Tab = {}
 
-local function addChild(self, handle)
-	local new = table.clone(self.children())
-	table.insert(new, handle)
-	self.children(new)
-
-	if handle.flag then
-		self.flags[handle.flag] = handle
-	end
-
-	return handle
-end
-
-function Tab.new(name, image, flags, onChanged)
+function Tab.new(name, icon, flags, onChanged)
 	local tab = {
 		name = name,
-		image = image,
+		icon = icon,
 		flags = flags,
 		onChanged = onChanged,
 		children = source({}),
 	}
 
-	function tab:CreateButton(config)
-		return addChild(self, Button.new(config.Name, config.Callback))
+	-- Every Create* funnels through here: the element goes into the tab's child list (which
+	-- vide renders), into the flag registry if it carries a Flag, and gets handed the way
+	-- back out again so :Destroy() can remove it.
+	local function addChild(handle)
+		local new = table.clone(tab.children())
+		table.insert(new, handle)
+		tab.children(new)
+
+		if handle.flag then
+			if flags[handle.flag] then
+				warn(`[PixlLib] duplicate Flag "{handle.flag}" - the config will only keep one of them`)
+			end
+			flags[handle.flag] = handle
+		end
+
+		handle._remove = function()
+			local remaining = {}
+			for _, child in tab.children() do
+				if child ~= handle then
+					table.insert(remaining, child)
+				end
+			end
+			tab.children(remaining)
+
+			if handle.flag and flags[handle.flag] == handle then
+				flags[handle.flag] = nil
+			end
+		end
+
+		return handle
 	end
 
-	function tab:CreateLabel(name)
-		return addChild(self, Label.new(name))
+	function tab:CreateButton(config)
+		return addChild(Button.new(config))
+	end
+
+	function tab:CreateLabel(config)
+		-- Historically the text was positional: CreateLabel("Text")
+		if type(config) == "string" then
+			config = { Name = config }
+		end
+		return addChild(Label.new(config))
+	end
+
+	function tab:CreateSection(config)
+		if type(config) == "string" then
+			config = { Name = config }
+		end
+		return addChild(Section.new(config))
 	end
 
 	function tab:CreateDivider()
-		return addChild(self, Divider.new())
+		return addChild(Divider.new({}))
 	end
 
 	function tab:CreateParagraph(config)
-		return addChild(self, Paragraph.new(config.Title, config.Content))
+		return addChild(Paragraph.new(config))
 	end
 
 	function tab:CreateToggle(config)
-		return addChild(self, Toggle.new(config.Name, config.CurrentValue, config.Flag, config.Callback, self.onChanged))
+		return addChild(Toggle.new(config, onChanged))
 	end
 
 	function tab:CreateSlider(config)
-		return addChild(self, Slider.new(config.Name, config.Suffix, config.Range, config.Increment, config.CurrentValue, config.Flag, config.Callback, self.onChanged))
+		return addChild(Slider.new(config, onChanged))
 	end
 
 	function tab:CreateInput(config)
-		return addChild(self, InputBox.new(config.Name, config.IsNumber, config.CurrentValue, config.Placeholder, config.Flag, config.Callback, self.onChanged))
+		return addChild(InputBox.new(config, onChanged))
 	end
 
 	function tab:CreateDropdown(config)
-		return addChild(self, Dropdown.new(config.Name, config.Options, config.MultipleOptions, config.Flag, config.Callback, self.onChanged))
+		return addChild(Dropdown.new(config, onChanged))
+	end
+
+	function tab:CreateKeybind(config)
+		return addChild(Keybind.new(config, onChanged))
 	end
 
 	return tab
@@ -1316,8 +2039,9 @@ end
 return Tab
 
 end)() end,
-    function()local wax,script,require=ImportGlobals(13)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
+    function()local wax,script,require=ImportGlobals(17)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Element = require("./Element")
 
 local create = vide.create
 local source = vide.source
@@ -1329,23 +2053,35 @@ local THUMB_ON = UDim2.fromScale(0.72, 0.5)
 
 local Toggle = {}
 
-function Toggle.new(name, currentValue, flag, callback, onChanged)
-	local toggle = {}
+function Toggle.new(config, onChanged)
+	local on = source(config.CurrentValue or false) -- the actual bool state
+	local callback = config.Callback
 
-	toggle.flag = flag
+	local function setValue(value, fire)
+		value = value and true or false -- a saved config can hand us anything
 
-	name = source(name)
-	local on = source(currentValue or false) -- the actual bool state
-
-	local function setValue(value, fireCallback)
-		on(value)
-		if fireCallback and callback then
-			callback(on())
+		if value == on() then
+			return
 		end
-		if fireCallback and onChanged then
-			onChanged()
+
+		on(value)
+
+		if fire then
+			if callback then
+				callback(value)
+			end
+			if onChanged then
+				onChanged()
+			end
 		end
 	end
+
+	local toggle = Element.new("Toggle", config, {
+		get = on,
+		set = setValue,
+	})
+
+	local name = toggle.name
 
 	function toggle:render()
 		local hovered = source(false)
@@ -1364,6 +2100,7 @@ function Toggle.new(name, currentValue, flag, callback, onChanged)
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 60),
 			BackgroundColor3 = bgColor,
+			Visible = toggle.visible,
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
@@ -1402,6 +2139,7 @@ function Toggle.new(name, currentValue, flag, callback, onChanged)
 			create("TextButton")({
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
+				Text = "",
 
 				MouseEnter = function()
 					hovered(true)
@@ -1417,25 +2155,19 @@ function Toggle.new(name, currentValue, flag, callback, onChanged)
 		})
 	end
 
-	function toggle:Get()
-		return on()
-	end
-
-	function toggle:Set(value)
-		setValue(value, false)
-	end
-
 	return toggle
 end
 
 return Toggle
 
 end)() end,
-    function()local wax,script,require=ImportGlobals(14)local ImportGlobals return (function(...)local Players = game:GetService("Players")
+    function()local wax,script,require=ImportGlobals(18)local ImportGlobals return (function(...)local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
 local vide = require("./Packages/vide")
 local Colors = require("./Colors")
+local Icons = require("./Icons")
+local Keybind = require("./Keybind")
 local Notification = require("./Notification")
 local Tab = require("./Tab")
 
@@ -1776,8 +2508,7 @@ local function createTabList(props)
 						BackgroundTransparency = 1,
 
 						Image = function()
-							local img = tab().image
-							return if img then "rbxassetid://" .. img else "rbxassetid://15637356511"
+							return tab().icon or Icons.resolve("misc")
 						end,
 
 						ImageColor3 = textColor,
@@ -1930,15 +2661,29 @@ function Window.new(config, notifications, flags, onChanged)
 			return
 		end
 
+		-- A keybind element is waiting for its new key: that press is being typed into the
+		-- element, so it must not also fold the window away.
+		if Keybind.IsCapturing() then
+			return
+		end
+
 		if input.KeyCode == toggleKey then
 			toggleMinimized()
 		end
 	end)
 	vide.cleanup(keyConn)
 
+	-- Hard on/off for the whole interface, separate from `minimized` (which is the animated
+	-- slide-away that leaves the Open pill behind). SetVisibility(false) leaves nothing.
+	local enabled = source(true)
+	self.enabled = enabled
+	self.minimized = minimized
+	self.toggleMinimized = toggleMinimized
+
 	self.node = create("ScreenGui")({
 		Name = "PixlLib",
 		IgnoreGuiInset = true,
+		Enabled = enabled,
 
 		create("UIScale")({ Scale = scale }),
 
@@ -2005,8 +2750,9 @@ function Window.new(config, notifications, flags, onChanged)
 	return self
 end
 
-function Window:CreateTab(name, image)
-	local tab = Tab.new(name, image, self.flags, self.onChanged)
+-- icon takes a name from Icons.Named ("farming"), a raw asset id, or an rbxassetid:// string
+function Window:CreateTab(name: string, icon: (string | number)?)
+	local tab = Tab.new(name, Icons.resolve(icon), self.flags, self.onChanged)
 
 	local new = table.clone(self.tabs())
 	table.insert(new, tab)
@@ -2019,10 +2765,40 @@ function Window:CreateTab(name, image)
 	return tab
 end
 
+function Window:SelectTab(tab)
+	self.activeTab(tab)
+end
+
+function Window:GetTabs()
+	return table.clone(self.tabs())
+end
+
+-- Shows/hides the entire interface, the Open pill included. This is the one to bind to a
+-- panic key; :Minimize() is the softer "get out of the way" the topbar button uses.
+function Window:SetVisibility(visible: boolean)
+	self.enabled(visible and true or false)
+end
+
+function Window:IsVisible(): boolean
+	return self.enabled()
+end
+
+function Window:Minimize(minimized: boolean?)
+	if minimized == nil then
+		self.toggleMinimized() -- no argument: flip it
+	elseif minimized ~= self.minimized() then
+		self.toggleMinimized()
+	end
+end
+
+function Window:IsMinimized(): boolean
+	return self.minimized()
+end
+
 return Window
 
 end)() end,
-    [18] = function()local wax,script,require=ImportGlobals(18)local ImportGlobals return (function(...)assert(game, "when using vide outside of Roblox, require lib.luau instead")
+    [22] = function()local wax,script,require=ImportGlobals(22)local ImportGlobals return (function(...)assert(game, "when using vide outside of Roblox, require lib.luau instead")
 
 local vide = require(script.lib)
 
@@ -2034,7 +2810,7 @@ export type Context<T> = vide.Context<T>
 return vide
 
 end)() end,
-    [19] = function()local wax,script,require=ImportGlobals(19)local ImportGlobals return (function(...)type Action = {
+    [23] = function()local wax,script,require=ImportGlobals(23)local ImportGlobals return (function(...)type Action = {
     priority: number,
     callback: (Instance) -> ()
 }
@@ -2061,7 +2837,7 @@ return function()
 end
 
 end)() end,
-    [20] = function()local wax,script,require=ImportGlobals(20)local ImportGlobals return (function(...)local typeof = game and typeof or require "../test/mock".typeof :: never
+    [24] = function()local wax,script,require=ImportGlobals(24)local ImportGlobals return (function(...)local typeof = game and typeof or require "../test/mock".typeof :: never
 
 local flags = require "./flags"
 local implicit_effect = require "./implicit_effect"
@@ -2225,7 +3001,7 @@ end
 return apply
 
 end)() end,
-    [21] = function()local wax,script,require=ImportGlobals(21)local ImportGlobals return (function(...)local flags = require "./flags"
+    [25] = function()local wax,script,require=ImportGlobals(25)local ImportGlobals return (function(...)local flags = require "./flags"
 local graph = require "./graph"
 
 local function batch(setter: () -> ())
@@ -2250,7 +3026,7 @@ end
 return batch
 
 end)() end,
-    [22] = function()local wax,script,require=ImportGlobals(22)local ImportGlobals return (function(...)local graph = require "./graph"
+    [26] = function()local wax,script,require=ImportGlobals(26)local ImportGlobals return (function(...)local graph = require "./graph"
 type Node<T> = graph.Node<T>
 local create_node = graph.create_node
 local push_scope = graph.push_scope
@@ -2292,7 +3068,7 @@ end
 return branch
 
 end)() end,
-    [23] = function()local wax,script,require=ImportGlobals(23)local ImportGlobals return (function(...)local action = require "./action"()
+    [27] = function()local wax,script,require=ImportGlobals(27)local ImportGlobals return (function(...)local action = require "./action"()
 local cleanup = require "./cleanup"
 
 local function changed<T>(property: string, callback: (T) -> ())
@@ -2312,7 +3088,7 @@ end
 return changed
 
 end)() end,
-    [24] = function()local wax,script,require=ImportGlobals(24)local ImportGlobals return (function(...)local typeof = game and typeof or require "../test/mock".typeof :: never
+    [28] = function()local wax,script,require=ImportGlobals(28)local ImportGlobals return (function(...)local typeof = game and typeof or require "../test/mock".typeof :: never
 
 local graph = require "./graph"
 local get_scope = graph.get_scope
@@ -2357,7 +3133,7 @@ return cleanup ::
 
 
 end)() end,
-    [25] = function()local wax,script,require=ImportGlobals(25)local ImportGlobals return (function(...)local graph = require "./graph"
+    [29] = function()local wax,script,require=ImportGlobals(29)local ImportGlobals return (function(...)local graph = require "./graph"
 type Node<T> = graph.Node<T>
 local create_node = graph.create_node
 local get_scope = graph.get_scope
@@ -2433,7 +3209,7 @@ end
 return context
 
 end)() end,
-    [26] = function()local wax,script,require=ImportGlobals(26)local ImportGlobals return (function(...)local typeof = game and typeof or require "../test/mock".typeof :: never
+    [30] = function()local wax,script,require=ImportGlobals(30)local ImportGlobals return (function(...)local typeof = game and typeof or require "../test/mock".typeof :: never
 local Instance = game and Instance or require "../test/mock".Instance :: never
 
 local defaults = require "./defaults"
@@ -2545,7 +3321,7 @@ type Create = (
 return (create :: any) :: Create
 
 end)() end,
-    [27] = function()local wax,script,require=ImportGlobals(27)local ImportGlobals return (function(...)local Enum = game and Enum or require "../test/mock".Enum :: never
+    [31] = function()local wax,script,require=ImportGlobals(31)local ImportGlobals return (function(...)local Enum = game and Enum or require "../test/mock".Enum :: never
 local Color3 = game and Color3 or require "../test/mock".Color3 :: never
 
 return {
@@ -2660,7 +3436,7 @@ return {
 }
 
 end)() end,
-    [28] = function()local wax,script,require=ImportGlobals(28)local ImportGlobals return (function(...)local graph = require "./graph"
+    [32] = function()local wax,script,require=ImportGlobals(32)local ImportGlobals return (function(...)local graph = require "./graph"
 local create_node = graph.create_node
 local push_scope_as_child_of = graph.push_scope_as_child_of
 local assert_stable_scope = graph.assert_stable_scope
@@ -2680,7 +3456,7 @@ end
 return derive
 
 end)() end,
-    [29] = function()local wax,script,require=ImportGlobals(29)local ImportGlobals return (function(...)local graph = require "./graph"
+    [33] = function()local wax,script,require=ImportGlobals(33)local ImportGlobals return (function(...)local graph = require "./graph"
 local create_node = graph.create_node
 local assert_stable_scope = graph.assert_stable_scope
 local evaluate_node = graph.evaluate_node
@@ -2694,7 +3470,7 @@ end
 return effect :: (<T>(callback: (T) -> T, initial_value: T) -> ()) & ((callback: () -> ()) -> ())
 
 end)() end,
-    [30] = function()local wax,script,require=ImportGlobals(30)local ImportGlobals return (function(...)local function inline_test(): string
+    [34] = function()local wax,script,require=ImportGlobals(34)local ImportGlobals return (function(...)local function inline_test(): string
     return debug.info(1, "n")
 end
 
@@ -2708,7 +3484,7 @@ return {
 }
 
 end)() end,
-    [31] = function()local wax,script,require=ImportGlobals(31)local ImportGlobals return (function(...)local flags = require "./flags"
+    [35] = function()local wax,script,require=ImportGlobals(35)local ImportGlobals return (function(...)local flags = require "./flags"
 
 export type SourceNode<T> = {
     cache: T,
@@ -3031,7 +3807,7 @@ return table.freeze {
 }
 
 end)() end,
-    [32] = function()local wax,script,require=ImportGlobals(32)local ImportGlobals return (function(...)local graph = require "./graph"
+    [36] = function()local wax,script,require=ImportGlobals(36)local ImportGlobals return (function(...)local graph = require "./graph"
 type Node<T> = graph.Node<T>
 local create_node = graph.create_node
 local assert_stable_scope = graph.assert_stable_scope
@@ -3158,7 +3934,7 @@ return {
 }
 
 end)() end,
-    [33] = function()local wax,script,require=ImportGlobals(33)local ImportGlobals return (function(...)local flags = require "./flags"
+    [37] = function()local wax,script,require=ImportGlobals(37)local ImportGlobals return (function(...)local flags = require "./flags"
 local branch = require "./branch"
 local source = require "./source"
 local effect = require "./effect"
@@ -3281,7 +4057,7 @@ end
 return indexes
 
 end)() end,
-    [34] = function()local wax,script,require=ImportGlobals(34)local ImportGlobals return (function(...)local version = { major = 0, minor = 4, patch = 0 }
+    [38] = function()local wax,script,require=ImportGlobals(38)local ImportGlobals return (function(...)local version = { major = 0, minor = 4, patch = 0 }
 
 local root = require "./root"
 local branch = require "./branch"
@@ -3403,7 +4179,7 @@ setmetatable(vide :: any, {
 return vide
 
 end)() end,
-    [35] = function()local wax,script,require=ImportGlobals(35)local ImportGlobals return (function(...)local root = require "./root"
+    [39] = function()local wax,script,require=ImportGlobals(39)local ImportGlobals return (function(...)local root = require "./root"
 local apply = require "./apply"
 
 local function mount<T>(component: () -> T, target: Instance?): () -> ()
@@ -3416,14 +4192,14 @@ end
 return mount :: (<T>(component: () -> T, target: Instance) -> () -> ()) & ((component: () -> ()) -> () -> ())
 
 end)() end,
-    [36] = function()local wax,script,require=ImportGlobals(36)local ImportGlobals return (function(...)local function read<T>(value: T | () -> T): T
+    [40] = function()local wax,script,require=ImportGlobals(40)local ImportGlobals return (function(...)local function read<T>(value: T | () -> T): T
     return if type(value) == "function" then value() else value
 end
 
 return read
 
 end)() end,
-    [37] = function()local wax,script,require=ImportGlobals(37)local ImportGlobals return (function(...)local graph = require "./graph"
+    [41] = function()local wax,script,require=ImportGlobals(41)local ImportGlobals return (function(...)local graph = require "./graph"
 type Node<T> = graph.Node<T>
 local create_node = graph.create_node
 local push_scope = graph.push_scope
@@ -3460,7 +4236,7 @@ end
 return root :: <T...>(fn: (destroy: () -> ()) -> T...) -> (() -> (), T...)
 
 end)() end,
-    [38] = function()local wax,script,require=ImportGlobals(38)local ImportGlobals return (function(...)local source = require "./source"
+    [42] = function()local wax,script,require=ImportGlobals(42)local ImportGlobals return (function(...)local source = require "./source"
 local derive = require "./derive"
 local effect = require "./effect"
 local untrack = require "./untrack"
@@ -3498,7 +4274,7 @@ end
 return show
 
 end)() end,
-    [39] = function()local wax,script,require=ImportGlobals(39)local ImportGlobals return (function(...)local graph = require "./graph"
+    [43] = function()local wax,script,require=ImportGlobals(43)local ImportGlobals return (function(...)local graph = require "./graph"
 type Node<T> = graph.Node<T>
 local create_source_node = graph.create_source_node
 local push_scope_as_child_of = graph.push_scope_as_child_of
@@ -3531,7 +4307,7 @@ end
 return source :: (<T>(initial_value: T) -> Source<T>) & (<T>() -> Source<T>)
 
 end)() end,
-    [40] = function()local wax,script,require=ImportGlobals(40)local ImportGlobals return (function(...)local graph = require "./graph"
+    [44] = function()local wax,script,require=ImportGlobals(44)local ImportGlobals return (function(...)local graph = require "./graph"
 type Node<T> = graph.Node<T>
 type SourceNode<T> = graph.SourceNode<T>
 local create_node = graph.create_node
@@ -3861,7 +4637,7 @@ return function()
 end
 
 end)() end,
-    [41] = function()local wax,script,require=ImportGlobals(41)local ImportGlobals return (function(...)local branch = require "./branch"
+    [45] = function()local wax,script,require=ImportGlobals(45)local ImportGlobals return (function(...)local branch = require "./branch"
 local source = require "./source"
 local effect = require "./effect"
 local timeout = require "./timeout" ()
@@ -3977,7 +4753,7 @@ end
 return switch
 
 end)() end,
-    [42] = function()local wax,script,require=ImportGlobals(42)local ImportGlobals return (function(...)local queue = {} :: {
+    [46] = function()local wax,script,require=ImportGlobals(46)local ImportGlobals return (function(...)local queue = {} :: {
     { t: number, fn: () -> (), cancel: boolean }
 }
 
@@ -4006,7 +4782,7 @@ end
 return function() return timeout, update_timeouts end
 
 end)() end,
-    [43] = function()local wax,script,require=ImportGlobals(43)local ImportGlobals return (function(...)local graph = require "./graph"
+    [47] = function()local wax,script,require=ImportGlobals(47)local ImportGlobals return (function(...)local graph = require "./graph"
 type Node<T> = graph.Node<T>
 local get_scope = graph.get_scope
 
@@ -4033,7 +4809,7 @@ end
 return untrack :: ( <T>(fn: () -> T) -> T ) & ( (fn: () -> ()) -> () )
 
 end)() end,
-    [44] = function()local wax,script,require=ImportGlobals(44)local ImportGlobals return (function(...)local flags = require "./flags"
+    [48] = function()local wax,script,require=ImportGlobals(48)local ImportGlobals return (function(...)local flags = require "./flags"
 local branch = require "./branch"
 local source = require "./source"
 local effect = require "./effect"
@@ -4166,628 +4942,7 @@ end
 return values
 
 end)() end,
-    [46] = function()local wax,script,require=ImportGlobals(46)local ImportGlobals return (function(...)local PrimitiveControls = require(script.Controls.PrimitiveControls)
-local DatatypeControls = require(script.Controls.DatatypeControls)
-local AdvancedControls = require(script.Controls.AdvancedControls)
-local StoryCreators = require(script.StoryCreators)
-local ControlUtils = require(script.Controls.ControlUtils)
-local ControlConversion = require(script.Controls.ControlConversion)
-local Utils = require(script.Utils)
-local Environment = require(script.Environment)
-local Types = require(script.Types)
-local Version = require(script.Version)
-
-export type Storybook = Types.Storybook
-export type FunctionStory = Types.FunctionStory
-export type ReactStory = Types.ReactStory
-export type RoactStory = Types.RoactStory
-export type FusionStory = Types.FusionStory
-export type IrisStory = Types.IrisStory
-export type VideStory = Types.VideStory
-export type GenericStory = Types.GenericStory
-
-export type ReactProps = Types.ReactProps
-export type FusionProps = Types.FusionProps
-export type IrisProps = Types.IrisProps
-export type VideProps = Types.VideProps
-export type GenericProps = Types.GenericProps
-export type GenericInfo<T> = Types.GenericInfo<T>
-export type SubscribeListener = Types.SubscribeListener
-
-local UILabs = {
-	_version = Version,
-	Boolean = PrimitiveControls.Boolean,
-	Number = PrimitiveControls.Number,
-	String = PrimitiveControls.String,
-
-	Choose = AdvancedControls.Choose,
-	EnumList = AdvancedControls.EnumList,
-	Object = AdvancedControls.Object,
-	RGBA = AdvancedControls.RGBA,
-	Slider = AdvancedControls.Slider,
-
-	Primitive = PrimitiveControls.Primitive,
-	Advanced = AdvancedControls,
-	Datatype = DatatypeControls,
-
-	ListenControl = Utils.ListenControl,
-	CreateControlStates = Utils.CreateControlStates,
-	UpdateControlStates = Utils.UpdateControlStates,
-
-	ControlGroup = ControlUtils.ControlGroup,
-	Ordered = ControlUtils.Ordered,
-
-	ConvertControl = ControlConversion.ConvertControl,
-
-	CreateGenericStory = StoryCreators.CreateGenericStory,
-	CreateReactStory = StoryCreators.CreateReactStory,
-	CreateRoactStory = StoryCreators.CreateRoactStory,
-	CreateFusionStory = StoryCreators.CreateFusionStory,
-	CreateIrisStory = StoryCreators.CreateIrisStory,
-	CreateVideStory = StoryCreators.CreateVideStory,
-
-	Environment = Environment,
-}
-
-return UILabs
-
-end)() end,
-    [49] = function()local wax,script,require=ImportGlobals(49)local ImportGlobals return (function(...)type RecordList<T> = { [string]: T }
-
-local Utils = require(script.Parent.Utils)
-local CreateBaseControl = Utils.CreateBaseControl
-local Controls = {}
-
-function Controls.Choose<T>(list: { T }, def: number?): Utils.Control<T>
-	if #list <= 0 then
-		error("UI-Labs: Array given in a Choose control is empty")
-	end
-	if def and def > #list then
-		error(`UI-Labs: Def index ({def}) given for the array is outside of the array size ({#list})`)
-	end
-
-	local control = CreateBaseControl("Choose", list[def or 1])
-	control.List = list
-	control.DefIndex = def or 1
-
-	return control
-end
-
-function Controls.EnumList<T>(list: RecordList<T>, def: string): Utils.Control<T>
-	if list[def] == nil then
-		error(`UI-Labs: Key given for the EnumList list ({def}) does not exist in the list`)
-	end
-
-	local control = CreateBaseControl("EnumList", list[def])
-	control.List = list
-	control.DefIndex = def
-
-	return control
-end
-
-function Controls.RGBA(def: Color3, transparency: number?): Utils.Control<{ Color: Color3, Transparency: number }>
-	return CreateBaseControl("RGBA", {
-		Color = def,
-		Transparency = transparency or 0,
-	})
-end
-
-function Controls.Slider(def: number, min: number, max: number, step: number?): Utils.Control<number>
-	if max <= min then
-		error(`UI-Labs: Max slider value ({max}) must be greater than the Min value ({min})`)
-	end
-	local control = CreateBaseControl("Slider", def)
-
-	control.Min = min
-	control.Max = max
-	control.Step = step
-
-	return control
-end
-
-type ObjectPredicator = (instance: Instance) -> boolean
-
-function Controls.Object(className: string?, def: Instance?, predicator: ObjectPredicator?): Utils.Control<Instance?>
-	local control = CreateBaseControl("Object", def)
-	control.ClassName = className or "Instance"
-	control.Predicator = predicator
-
-	return control
-end
-
--- [[ TYPES ]] --
-
-return Controls
-
-end)() end,
-    [50] = function()local wax,script,require=ImportGlobals(50)local ImportGlobals return (function(...)local Primitive = require(script.Parent.PrimitiveControls).Primitive
-local Datatype = require(script.Parent.DatatypeControls)
-
-local ControlConversion = {}
-
-local function ConvertPrimitive(value: any, primitive: string)
-	local converter = Primitive[primitive]
-
-	assert(converter, `UI-Labs: Primitive ({primitive}) can't be converted to a control`)
-	return converter(value)
-end
-
-local function ConvertDatatype(value: any, datatype: string)
-	local converter = Datatype[datatype]
-
-	assert(converter, `UI-Labs: Datatype ({datatype}) can't be converted to a control`)
-	return converter(value)
-end
-
-function ControlConversion.ConvertControl(control: any)
-	local controlType = typeof(control)
-
-	if controlType == "table" then
-		return control
-	end
-
-	if Primitive[controlType] then
-		return ConvertPrimitive(control, controlType)
-	elseif Datatype[controlType] then
-		return ConvertDatatype(control, controlType)
-	else
-		error(`UI-Labs: Control ({control}) is not a valid control`)
-	end
-end
-
-return ControlConversion
-
-end)() end,
-    [51] = function()local wax,script,require=ImportGlobals(51)local ImportGlobals return (function(...)local ControlConversion = require(script.Parent.ControlConversion)
-local ControlUtils = {}
-
-function ControlUtils.ControlGroup(controls: { [string]: any })
-	local group = {
-		EntryType = "ControlGroup",
-		Controls = controls,
-	}
-	return group
-end
-
-function ControlUtils.Ordered<T>(control: T, order: number): T
-	local converted = ControlConversion.ConvertControl(control)
-	converted.Order = order
-	return converted
-end
-
-return ControlUtils
-
-end)() end,
-    [52] = function()local wax,script,require=ImportGlobals(52)local ImportGlobals return (function(...)local Utils = require(script.Parent.Utils)
-local CreateBaseControl = Utils.CreateBaseControl
-local Datatypes = {}
-
-function Datatypes.Color3(def: Color3): Utils.Control<Color3>
-	local fixedColor = Color3.new(math.clamp(def.R, 0, 1), math.clamp(def.G, 0, 1), math.clamp(def.B, 0, 1))
-	return CreateBaseControl("Color3", fixedColor)
-end
-
---[[
---[User Interface]--
-function Datatypes.UDim2(def: UDim2)
-	return CreateBaseControl("UDim2", def)
-end
-function Datatypes.UDim(def: UDim)
-	return CreateBaseControl("UDim", def)
-end
-
---[Space 3D]--
-function Datatypes.CFrame(def: CFrame)
-	return CreateBaseControl("CFrame", def)
-end
-
-function Datatypes.Vector2(def: Vector2, normalize: boolean?)
-	local control = CreateBaseControl("Vector2", def)
-	control.Normalize = if normalize == nil then false else normalize
-
-	return control
-end
-function Datatypes.Vector3(def: Vector3, normalize: boolean?)
-	local control = CreateBaseControl("Vector3", def)
-	control.Normalize = if normalize == nil then false else normalize
-
-	return CreateBaseControl("Vector3", def)
-end ]]
-
-return Datatypes
-
-end)() end,
-    [53] = function()local wax,script,require=ImportGlobals(53)local ImportGlobals return (function(...)type Filter = (input: string, oldInput: string) -> string
-
-local Utils = require(script.Parent.Utils)
-local CreateBaseControl = Utils.CreateBaseControl
-local Controls = {}
-
-function Controls.String(def: string, filters: { Filter }?): Utils.Control<string>
-	local control = CreateBaseControl("String", def)
-	control.Filters = filters
-
-	return control
-end
-
-function Controls.Number(
-	def: number,
-	min: number?,
-	max: number?,
-	step: number?,
-	dragger: boolean?,
-	sens: number?
-): Utils.Control<number>
-	local control = CreateBaseControl("Number", def)
-
-	control.Min = min
-	control.Max = max
-	control.Step = step
-	control.Dragger = if dragger == nil then true else dragger
-	control.Sensibility = sens or (def * 10)
-
-	return control
-end
-
-function Controls.Boolean(def: boolean): Utils.Control<boolean>
-	return CreateBaseControl("Boolean", def)
-end
-
-Controls.Primitive = {
-	string = Controls.String,
-	number = Controls.Number,
-	boolean = Controls.Boolean,
-}
-
-return Controls
-
-end)() end,
-    [54] = function()local wax,script,require=ImportGlobals(54)local ImportGlobals return (function(...)local Utils = {}
-
-export type Control<T> = {
-	ControlValue: T,
-}
-
-function Utils.CreateBaseControl(controlType: string, def)
-	local control = {
-		EntryType = "Control",
-		Type = controlType,
-		ControlValue = def,
-	}
-	return control
-end
-
-return Utils
-
-end)() end,
-    [55] = function()local wax,script,require=ImportGlobals(55)local ImportGlobals return (function(...)local UserInputService = game:GetService("UserInputService")
-local Environment = {}
-
-Environment.EnvGlobalInjectionKey = "__hotreload_env_global_injection__" -- the longer the better
-
-function SearchInEnv(key: string, def: any?)
-	local env = Environment.GetEnvGlobalInjection()
-
-	return (env and env[key]) or def
-end
-
-function Environment.GetEnvGlobalInjection()
-	local env = getfenv()
-
-	return env[Environment.EnvGlobalInjectionKey]
-end
-function Environment.IsStory()
-	local env = Environment.GetEnvGlobalInjection()
-
-	return env ~= nil
-end
-function UserInputFallback(userInput: any?)
-	if not userInput then
-		return UserInputService
-	end
-	if userInput == UserInputService then
-		return UserInputService
-	end
-
-	local clone = table.clone(userInput)
-	return setmetatable(clone, {
-		__index = function(_, key)
-			local value = UserInputService[key]
-			if typeof(value) == "function" then
-				-- Wrap the function to replace self
-				return function(_, ...)
-					return value(UserInputService, ...)
-				end
-			end
-			return value
-		end,
-	})
-end
-
-Environment.Unmount = SearchInEnv("Unmount", function() end) :: () -> ()
-
-Environment.Reload = SearchInEnv("Reload", function() end) :: () -> ()
-Environment.CreateSnapshot = SearchInEnv("CreateSnapshot", function() end) :: (name: string?) -> ()
-Environment.SetStoryHolder = SearchInEnv("SetStoryHolder", function() end) :: (holder: Instance?) -> ()
-Environment.GetJanitor = function()
-	local janitor = SearchInEnv("StoryJanitor")
-	return janitor
-end
-
-type InputSignals = {
-	InputBegan: RBXScriptSignal,
-	InputEnded: RBXScriptSignal,
-	InputChanged: RBXScriptSignal,
-	MouseMoved: RBXScriptSignal,
-	GetMouseLocation: (self: any) -> Vector2,
-}
-
-Environment.InputListener = SearchInEnv("InputListener", nil) :: InputSignals
-Environment.UserInput = UserInputFallback(SearchInEnv("InputListener", UserInputService)) :: UserInputService
-
-Environment.EnvironmentUID = SearchInEnv("EnvironmentUID", "") :: string
-Environment.PreviewUID = SearchInEnv("PreviewUID", "") :: string
-Environment.OriginalG = SearchInEnv("OriginalG", _G) :: any
-Environment.PluginWidget = SearchInEnv("PluginWidget", nil) :: DockWidgetPluginGui
-Environment.Plugin = SearchInEnv("Plugin", plugin) :: Plugin
-
-return Environment
-
-end)() end,
-    [57] = function()local wax,script,require=ImportGlobals(57)local ImportGlobals return (function(...)local Creators = {}
-local Types = require(script.Parent.Types)
-
-type InputSignals = {
-	InputBegan: RBXScriptConnection,
-	InputEnded: RBXScriptConnection,
-	InputChanged: RBXScriptConnection,
-	MouseMoved: RBXScriptConnection,
-}
-
-local function CombineTableInfo(table1, table2)
-	for key, val in pairs(table2) do
-		table1[key] = val
-	end
-	return table1
-end
-
-function Creators.CreateRoactStory(
-	info: Types.StoryBase & Types.WithRoact,
-	render: Types.ReactStoryKey
-): Types.RoactStory
-	local returnStory = {
-		use = "roact",
-		story = render,
-	}
-
-	return CombineTableInfo(returnStory, info)
-end
-
-function Creators.CreateReactStory(
-	info: Types.StoryBase & Types.WithReact,
-	render: Types.ReactStoryKey
-): Types.ReactStory
-	local returnStory = {
-		use = "react",
-		story = render,
-	}
-
-	return CombineTableInfo(returnStory, info)
-end
-
-function Creators.CreateFusionStory(
-	info: Types.StoryBase & Types.WithFusion,
-	render: Types.FusionStoryKey
-): Types.FusionStory
-	local returnStory = {
-		use = "fusion",
-		story = render,
-	}
-
-	return CombineTableInfo(returnStory, info)
-end
-
-function Creators.CreateIrisStory(info: Types.StoryBase & Types.WithIris, render: Types.IrisStoryKey): Types.IrisStory
-	local returnStory = {
-		use = "iris",
-		story = render,
-	}
-
-	return CombineTableInfo(returnStory, info)
-end
-
-function Creators.CreateVideStory(info: Types.StoryBase & Types.WithVide, render: Types.VideStoryKey): Types.VideStory
-	local returnStory = {
-		use = "Vide",
-		story = render,
-	}
-
-	return CombineTableInfo(returnStory, info)
-end
-
-function Creators.CreateGenericStory(info: Types.StoryBase, render: Types.GenericRenderKey): Types.GenericStory
-	local returnStory = {
-		render = render,
-	}
-
-	return CombineTableInfo(returnStory, info)
-end
-
-return Creators
-
-end)() end,
-    [58] = function()local wax,script,require=ImportGlobals(58)local ImportGlobals return (function(...)export type Storybook = {
-	name: string?,
-	storyRoots: { Instance },
-	groupRoots: boolean?,
-}
-type Cleanup = () -> ()
-export type FunctionStory = (target: Frame) -> Cleanup
-
-export type StoryBase = {
-	name: string?,
-	summary: string?,
-	cleanup: Cleanup?,
-	controls: StoryControls?,
-}
-
-type StoryControls = { [string]: any }
-
-------------------------------- REACT/ROACT ------------------------------
-
-export type ReactProps = {
-	controls: { [string]: any },
-}
-export type WithReact = {
-	use: "react"?,
-	react: any,
-	reactRoblox: any,
-}
-export type ReactStoryKey = (props: ReactProps) -> any
-export type ReactStory = StoryBase & WithReact & {
-	story: ReactStoryKey,
-}
-
-export type WithRoact = {
-	use: "roact"?,
-	roact: any,
-}
-export type RoactStory = StoryBase & WithRoact & {
-	story: ReactStoryKey,
-}
-
---------------------------------- FUSION ---------------------------------
-
-export type FusionProps = {
-	controls: { [string]: any },
-	scope: any,
-	target: GuiObject,
-}
-
-export type WithFusion = {
-	use: "fusion"?,
-	fusion: any,
-	scoped: { any }?,
-}
-
-export type FusionStoryKey = (props: FusionProps) -> any?
-export type FusionStory = StoryBase & WithFusion & {
-	story: FusionStoryKey,
-}
-
----------------------------------- IRIS ----------------------------------
-
-export type IrisProps = {
-	controls: { [string]: any },
-	target: GuiObject,
-}
-
-export type WithIris = {
-	use: "iris"?,
-	iris: any,
-}
-
-export type IrisStoryKey = (props: IrisProps) -> Cleanup? | nil
-export type IrisStory = StoryBase & WithIris & {
-	story: IrisStoryKey,
-}
-
----------------------------------- VIDE ----------------------------------
-
-export type VideProps = {
-	controls: { [string]: any },
-	target: GuiObject,
-}
-
-export type WithVide = {
-	use: "vide"?,
-	vide: any,
-}
-
-export type VideStoryKey = (props: VideProps) -> any?
-export type VideStory = StoryBase & WithVide & {
-	story: VideStoryKey,
-}
-
----------------------------------- GENERIC --------------------------------
-export type GenericInfo<T> = { __old: T, __new: T }
-
-export type SubscribeListener = (values: { [string]: any }, info: { [string]: GenericInfo<any> }) -> ()
-
-export type GenericProps = {
-	controls: { [string]: any },
-	target: GuiObject,
-	converted: { [string]: any },
-	subscribe: (listener: SubscribeListener) -> Cleanup,
-}
-
-export type GenericRenderKey = (props: GenericProps) -> Cleanup
-
-export type GenericStory = StoryBase & {
-	render: GenericRenderKey,
-}
-
-return nil
-
-end)() end,
-    [60] = function()local wax,script,require=ImportGlobals(60)local ImportGlobals return (function(...)local Utils = {}
-local Types = require(script.Parent.Types)
-
-function Utils.ListenControl<T>(info: Types.GenericInfo<T>, callback: (newVal: T) -> ())
-	local oldValue = info.__old
-	local newValue = info.__new
-
-	if oldValue ~= newValue then
-		callback(newValue)
-	end
-end
-
-function Utils.CreateControlStates(
-	converted: { [string]: any },
-	controls: { [string]: any },
-	creator: (control: any) -> any
-)
-	local states = {}
-
-	for key, control in pairs(converted) do
-		local controlValue = controls[key]
-
-		if control.EntryType == "ControlGroup" then -- control is a control group, we need to recurse
-			states[key] = Utils.CreateControlStates(control.Controls, controlValue, creator)
-			continue
-		end
-		states[key] = creator(controlValue)
-	end
-
-	return states
-end
-
-function Utils.UpdateControlStates(
-	states: { [string]: any },
-	converted: { [string]: any },
-	controls: { [string]: any },
-	updater: (state: any, value: any) -> ()
-)
-	for key, control in pairs(converted) do
-		local controlValue = controls[key]
-
-		if control.EntryType == "ControlGroup" then -- control is a control group, we need to recurse
-			Utils.UpdateControlStates(states[key], control.Controls, controlValue, updater)
-			continue
-		end
-		updater(states[key], controlValue)
-	end
-end
-
-return Utils
-
-end)() end,
-    [61] = function()local wax,script,require=ImportGlobals(61)local ImportGlobals return (function(...)return "2.4.2"
-end)() end,
-    [62] = function()local wax,script,require=ImportGlobals(62)local ImportGlobals return (function(...)return require(script.Parent._Index["pepeeltoro41_ui-labs@2.4.2"]["ui-labs"])
-
-end)() end,
-    [63] = function()local wax,script,require=ImportGlobals(63)local ImportGlobals return (function(...)return require(script.Parent._Index["centau_vide@0.4.0"]["vide"])
+    [49] = function()local wax,script,require=ImportGlobals(49)local ImportGlobals return (function(...)return require(script.Parent._Index["centau_vide@0.4.0"]["vide"])
 
 end)() end
 } -- [RefId] = Closure
@@ -4809,373 +4964,227 @@ local ObjectTree = {
                 },
                 {
                     {
-                        10,
+                        12,
                         2,
                         {
-                            "Paragraph"
-                        }
-                    },
-                    {
-                        13,
-                        2,
-                        {
-                            "Toggle"
-                        }
-                    },
-                    {
-                        8,
-                        2,
-                        {
-                            "Label"
-                        }
-                    },
-                    {
-                        14,
-                        2,
-                        {
-                            "Window"
-                        }
-                    },
-                    {
-                        4,
-                        2,
-                        {
-                            "Colors"
+                            "Notification"
                         }
                     },
                     {
                         15,
+                        2,
+                        {
+                            "Slider"
+                        }
+                    },
+                    {
+                        19,
                         1,
                         {
                             "Packages"
                         },
                         {
                             {
-                                16,
+                                20,
                                 1,
                                 {
                                     "_Index"
                                 },
                                 {
                                     {
-                                        17,
+                                        21,
                                         1,
                                         {
                                             "centau_vide@0.4.0"
                                         },
                                         {
                                             {
-                                                18,
+                                                22,
                                                 2,
                                                 {
                                                     "vide"
                                                 },
                                                 {
                                                     {
-                                                        32,
-                                                        2,
-                                                        {
-                                                            "implicit_effect"
-                                                        }
-                                                    },
-                                                    {
-                                                        21,
-                                                        2,
-                                                        {
-                                                            "batch"
-                                                        }
-                                                    },
-                                                    {
-                                                        23,
-                                                        2,
-                                                        {
-                                                            "changed"
-                                                        }
-                                                    },
-                                                    {
-                                                        39,
-                                                        2,
-                                                        {
-                                                            "source"
-                                                        }
-                                                    },
-                                                    {
-                                                        24,
-                                                        2,
-                                                        {
-                                                            "cleanup"
-                                                        }
-                                                    },
-                                                    {
-                                                        44,
-                                                        2,
-                                                        {
-                                                            "values"
-                                                        }
-                                                    },
-                                                    {
-                                                        29,
-                                                        2,
-                                                        {
-                                                            "effect"
-                                                        }
-                                                    },
-                                                    {
-                                                        43,
-                                                        2,
-                                                        {
-                                                            "untrack"
-                                                        }
-                                                    },
-                                                    {
-                                                        22,
+                                                        26,
                                                         2,
                                                         {
                                                             "branch"
                                                         }
                                                     },
                                                     {
-                                                        27,
-                                                        2,
-                                                        {
-                                                            "defaults"
-                                                        }
-                                                    },
-                                                    {
-                                                        42,
-                                                        2,
-                                                        {
-                                                            "timeout"
-                                                        }
-                                                    },
-                                                    {
-                                                        26,
-                                                        2,
-                                                        {
-                                                            "create"
-                                                        }
-                                                    },
-                                                    {
-                                                        41,
-                                                        2,
-                                                        {
-                                                            "switch"
-                                                        }
-                                                    },
-                                                    {
-                                                        40,
-                                                        2,
-                                                        {
-                                                            "spring"
-                                                        }
-                                                    },
-                                                    {
-                                                        38,
-                                                        2,
-                                                        {
-                                                            "show"
-                                                        }
-                                                    },
-                                                    {
-                                                        19,
-                                                        2,
-                                                        {
-                                                            "action"
-                                                        }
-                                                    },
-                                                    {
-                                                        35,
-                                                        2,
-                                                        {
-                                                            "mount"
-                                                        }
-                                                    },
-                                                    {
-                                                        36,
-                                                        2,
-                                                        {
-                                                            "read"
-                                                        }
-                                                    },
-                                                    {
                                                         28,
                                                         2,
                                                         {
-                                                            "derive"
-                                                        }
-                                                    },
-                                                    {
-                                                        37,
-                                                        2,
-                                                        {
-                                                            "root"
-                                                        }
-                                                    },
-                                                    {
-                                                        33,
-                                                        2,
-                                                        {
-                                                            "indexes"
-                                                        }
-                                                    },
-                                                    {
-                                                        34,
-                                                        2,
-                                                        {
-                                                            "lib"
-                                                        }
-                                                    },
-                                                    {
-                                                        31,
-                                                        2,
-                                                        {
-                                                            "graph"
-                                                        }
-                                                    },
-                                                    {
-                                                        20,
-                                                        2,
-                                                        {
-                                                            "apply"
+                                                            "cleanup"
                                                         }
                                                     },
                                                     {
                                                         30,
                                                         2,
                                                         {
+                                                            "create"
+                                                        }
+                                                    },
+                                                    {
+                                                        33,
+                                                        2,
+                                                        {
+                                                            "effect"
+                                                        }
+                                                    },
+                                                    {
+                                                        48,
+                                                        2,
+                                                        {
+                                                            "values"
+                                                        }
+                                                    },
+                                                    {
+                                                        24,
+                                                        2,
+                                                        {
+                                                            "apply"
+                                                        }
+                                                    },
+                                                    {
+                                                        47,
+                                                        2,
+                                                        {
+                                                            "untrack"
+                                                        }
+                                                    },
+                                                    {
+                                                        46,
+                                                        2,
+                                                        {
+                                                            "timeout"
+                                                        }
+                                                    },
+                                                    {
+                                                        29,
+                                                        2,
+                                                        {
+                                                            "context"
+                                                        }
+                                                    },
+                                                    {
+                                                        34,
+                                                        2,
+                                                        {
                                                             "flags"
+                                                        }
+                                                    },
+                                                    {
+                                                        35,
+                                                        2,
+                                                        {
+                                                            "graph"
+                                                        }
+                                                    },
+                                                    {
+                                                        37,
+                                                        2,
+                                                        {
+                                                            "indexes"
+                                                        }
+                                                    },
+                                                    {
+                                                        31,
+                                                        2,
+                                                        {
+                                                            "defaults"
+                                                        }
+                                                    },
+                                                    {
+                                                        36,
+                                                        2,
+                                                        {
+                                                            "implicit_effect"
+                                                        }
+                                                    },
+                                                    {
+                                                        27,
+                                                        2,
+                                                        {
+                                                            "changed"
+                                                        }
+                                                    },
+                                                    {
+                                                        44,
+                                                        2,
+                                                        {
+                                                            "spring"
+                                                        }
+                                                    },
+                                                    {
+                                                        41,
+                                                        2,
+                                                        {
+                                                            "root"
+                                                        }
+                                                    },
+                                                    {
+                                                        40,
+                                                        2,
+                                                        {
+                                                            "read"
+                                                        }
+                                                    },
+                                                    {
+                                                        42,
+                                                        2,
+                                                        {
+                                                            "show"
+                                                        }
+                                                    },
+                                                    {
+                                                        43,
+                                                        2,
+                                                        {
+                                                            "source"
+                                                        }
+                                                    },
+                                                    {
+                                                        39,
+                                                        2,
+                                                        {
+                                                            "mount"
+                                                        }
+                                                    },
+                                                    {
+                                                        45,
+                                                        2,
+                                                        {
+                                                            "switch"
+                                                        }
+                                                    },
+                                                    {
+                                                        38,
+                                                        2,
+                                                        {
+                                                            "lib"
+                                                        }
+                                                    },
+                                                    {
+                                                        23,
+                                                        2,
+                                                        {
+                                                            "action"
+                                                        }
+                                                    },
+                                                    {
+                                                        32,
+                                                        2,
+                                                        {
+                                                            "derive"
                                                         }
                                                     },
                                                     {
                                                         25,
                                                         2,
                                                         {
-                                                            "context"
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    },
-                                    {
-                                        45,
-                                        1,
-                                        {
-                                            "pepeeltoro41_ui-labs@2.4.2"
-                                        },
-                                        {
-                                            {
-                                                46,
-                                                2,
-                                                {
-                                                    "ui-labs"
-                                                },
-                                                {
-                                                    {
-                                                        61,
-                                                        2,
-                                                        {
-                                                            "Version"
-                                                        }
-                                                    },
-                                                    {
-                                                        55,
-                                                        2,
-                                                        {
-                                                            "Environment"
-                                                        }
-                                                    },
-                                                    {
-                                                        60,
-                                                        2,
-                                                        {
-                                                            "Utils"
-                                                        }
-                                                    },
-                                                    {
-                                                        57,
-                                                        2,
-                                                        {
-                                                            "StoryCreators"
-                                                        }
-                                                    },
-                                                    {
-                                                        59,
-                                                        1,
-                                                        {
-                                                            "Typing"
-                                                        }
-                                                    },
-                                                    {
-                                                        48,
-                                                        1,
-                                                        {
-                                                            "Controls"
-                                                        },
-                                                        {
-                                                            {
-                                                                52,
-                                                                2,
-                                                                {
-                                                                    "DatatypeControls"
-                                                                }
-                                                            },
-                                                            {
-                                                                50,
-                                                                2,
-                                                                {
-                                                                    "ControlConversion"
-                                                                }
-                                                            },
-                                                            {
-                                                                51,
-                                                                2,
-                                                                {
-                                                                    "ControlUtils"
-                                                                }
-                                                            },
-                                                            {
-                                                                49,
-                                                                2,
-                                                                {
-                                                                    "AdvancedControls"
-                                                                }
-                                                            },
-                                                            {
-                                                                53,
-                                                                2,
-                                                                {
-                                                                    "PrimitiveControls"
-                                                                }
-                                                            },
-                                                            {
-                                                                54,
-                                                                2,
-                                                                {
-                                                                    "Utils"
-                                                                }
-                                                            }
-                                                        }
-                                                    },
-                                                    {
-                                                        56,
-                                                        1,
-                                                        {
-                                                            "Libraries"
-                                                        }
-                                                    },
-                                                    {
-                                                        58,
-                                                        2,
-                                                        {
-                                                            "Types"
-                                                        }
-                                                    },
-                                                    {
-                                                        47,
-                                                        1,
-                                                        {
-                                                            "ControlTypings"
+                                                            "batch"
                                                         }
                                                     }
                                                 }
@@ -5185,14 +5194,7 @@ local ObjectTree = {
                                 }
                             },
                             {
-                                62,
-                                2,
-                                {
-                                    "uilabs"
-                                }
-                            },
-                            {
-                                63,
+                                49,
                                 2,
                                 {
                                     "vide"
@@ -5201,31 +5203,24 @@ local ObjectTree = {
                         }
                     },
                     {
-                        12,
+                        8,
                         2,
                         {
-                            "Tab"
+                            "Icons"
                         }
                     },
                     {
-                        11,
+                        13,
                         2,
                         {
-                            "Slider"
+                            "Paragraph"
                         }
                     },
                     {
-                        5,
+                        18,
                         2,
                         {
-                            "Divider"
-                        }
-                    },
-                    {
-                        7,
-                        2,
-                        {
-                            "InputBox"
+                            "Window"
                         }
                     },
                     {
@@ -5236,10 +5231,24 @@ local ObjectTree = {
                         }
                     },
                     {
-                        9,
+                        11,
                         2,
                         {
-                            "Notification"
+                            "Label"
+                        }
+                    },
+                    {
+                        17,
+                        2,
+                        {
+                            "Toggle"
+                        }
+                    },
+                    {
+                        5,
+                        2,
+                        {
+                            "Divider"
                         }
                     },
                     {
@@ -5247,6 +5256,48 @@ local ObjectTree = {
                         2,
                         {
                             "Button"
+                        }
+                    },
+                    {
+                        16,
+                        2,
+                        {
+                            "Tab"
+                        }
+                    },
+                    {
+                        14,
+                        2,
+                        {
+                            "Section"
+                        }
+                    },
+                    {
+                        4,
+                        2,
+                        {
+                            "Colors"
+                        }
+                    },
+                    {
+                        10,
+                        2,
+                        {
+                            "Keybind"
+                        }
+                    },
+                    {
+                        7,
+                        2,
+                        {
+                            "Element"
+                        }
+                    },
+                    {
+                        9,
+                        2,
+                        {
+                            "InputBox"
                         }
                     }
                 }
@@ -5259,59 +5310,50 @@ local ObjectTree = {
 local LineOffsets = {
     8,
     11,
-    144,
-    220,
-    241,
-    263,
-    710,
-    858,
-    896,
-    1010,
-    1074,
+    270,
+    357,
+    378,
+    413,
+    911,
+    1014,
+    1088,
     1246,
-    1319,
-    1434,
-    [18] = 2025,
-    [19] = 2037,
-    [20] = 2064,
-    [21] = 2228,
-    [22] = 2253,
-    [23] = 2295,
-    [24] = 2315,
-    [25] = 2360,
-    [26] = 2436,
-    [27] = 2548,
-    [28] = 2663,
-    [29] = 2683,
-    [30] = 2697,
-    [31] = 2711,
-    [32] = 3034,
-    [33] = 3161,
-    [34] = 3284,
-    [35] = 3406,
-    [36] = 3419,
-    [37] = 3426,
-    [38] = 3463,
-    [39] = 3501,
-    [40] = 3534,
-    [41] = 3864,
-    [42] = 3980,
-    [43] = 4009,
-    [44] = 4036,
-    [46] = 4169,
-    [49] = 4235,
-    [50] = 4303,
-    [51] = 4341,
-    [52] = 4361,
-    [53] = 4400,
-    [54] = 4445,
-    [55] = 4463,
-    [57] = 4537,
-    [58] = 4619,
-    [60] = 4733,
-    [61] = 4785,
-    [62] = 4787,
-    [63] = 4790
+    1445,
+    1481,
+    1596,
+    1671,
+    1729,
+    1931,
+    2042,
+    2164,
+    [22] = 2801,
+    [23] = 2813,
+    [24] = 2840,
+    [25] = 3004,
+    [26] = 3029,
+    [27] = 3071,
+    [28] = 3091,
+    [29] = 3136,
+    [30] = 3212,
+    [31] = 3324,
+    [32] = 3439,
+    [33] = 3459,
+    [34] = 3473,
+    [35] = 3487,
+    [36] = 3810,
+    [37] = 3937,
+    [38] = 4060,
+    [39] = 4182,
+    [40] = 4195,
+    [41] = 4202,
+    [42] = 4239,
+    [43] = 4277,
+    [44] = 4310,
+    [45] = 4640,
+    [46] = 4756,
+    [47] = 4785,
+    [48] = 4812,
+    [49] = 4945
 }
 
 -- Misc AOT variable imports
