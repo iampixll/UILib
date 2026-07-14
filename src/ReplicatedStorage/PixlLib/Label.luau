@@ -20,7 +20,7 @@ function Label.new(config)
 
 			Text = name,
 			TextColor3 = color,
-			TextSize = 24,
+			TextSize = 32,
 			TextXAlignment = "Left",
 			TextYAlignment = "Bottom",
 

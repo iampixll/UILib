@@ -34,13 +34,13 @@ function Section.new(config)
 
 				Text = name,
 				TextColor3 = Colors.textMuted,
-				TextSize = 18,
+				TextSize = 26,
 				TextXAlignment = "Left",
 				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
 			}),
 
 			create("Frame")({ -- rule filling the rest of the row
-				Size = UDim2.new(1, 0, 0, 1),
+				Size = UDim2.new(1, 0, 0, 2),
 				LayoutOrder = 2,
 				BackgroundColor3 = Colors.stroke,
 				BorderSizePixel = 0,
