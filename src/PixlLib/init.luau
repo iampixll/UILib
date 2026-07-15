@@ -207,6 +207,12 @@ function PixlLib:CreateWindow(config)
 
 	self._window = window
 	self._unmount = function()
+		-- Stop the running features FIRST, while the elements and their callbacks still
+		-- exist. This is the manual "turn everything off before unloading" that a caller used
+		-- to have to write by hand - now it is unavoidable, so a reload can never leave an
+		-- orphaned loop firing remotes with no switch left to stop it.
+		window:TeardownAll()
+
 		destroyScope()
 		if window.node then
 			window.node:Destroy()

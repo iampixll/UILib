@@ -8,6 +8,21 @@ local indexes = vide.indexes
 local spring = vide.spring
 local changed = vide.changed
 
+-- The open panel is measured, not guessed: it is exactly as tall as the rows it holds - the
+-- search row plus one row per option that survives the search - and stops growing at
+-- MAX_ROWS, from where the list scrolls. A fixed height left a two-option dropdown with two
+-- empty slots below it.
+local ROW_HEIGHT = 60
+local ROW_GAP = 12 -- UIListLayout padding between the rows
+local PANEL_PADDING = 8 -- the scroll frame's own UIPadding, top + bottom
+local HEADER_GAP = 10 -- the panel starts 10px below the 60px header
+local MAX_ROWS = 4 -- search row + 3 options before it scrolls
+
+local function panelHeightFor(rowCount: number): number
+	local rows = math.min(rowCount, MAX_ROWS)
+	return rows * ROW_HEIGHT + (rows - 1) * ROW_GAP + PANEL_PADDING + HEADER_GAP
+end
+
 local Dropdown = {}
 
 function Dropdown.new(config, onChanged)
@@ -91,8 +106,28 @@ function Dropdown.new(config, onChanged)
 			return if open() then 180 else 0
 		end, 0.3)
 
+		-- The options the search leaves standing. Both the row list and the panel height read
+		-- this, so they can never disagree about how many rows there are.
+		local function visibleOptions()
+			local query = searchText():lower()
+			local matches = {}
+
+			for _, optionName in optionList() do
+				if string.find(optionName:lower(), query, 1, true) then
+					table.insert(matches, optionName)
+				end
+			end
+
+			return matches
+		end
+
 		local panelHeight = spring(function() -- single height source for the whole expand/collapse
-			return if open() then 294 else 0
+			if not open() then
+				return 0
+			end
+
+			-- +1 for the fixed search row, which is a row like any other
+			return panelHeightFor(1 + #visibleOptions())
 		end, 0.3)
 
 		local function allSelected()
@@ -359,17 +394,7 @@ function Dropdown.new(config, onChanged)
 					}),
 				}),
 
-				indexes(function()
-					local query = searchText():lower()
-					local matches = {}
-					for _, optionName in optionList() do
-						if string.find(optionName:lower(), query, 1, true) then
-							table.insert(matches, optionName)
-						end
-					end
-
-					return matches
-				end, function(option, i)
+				indexes(visibleOptions, function(option, i)
 					local optionHovered = source(false)
 					local optionBg = spring(function() -- rests on surface over the dark backdrop, hovers one step up
 						return if optionHovered() then Colors.surfaceHover else Colors.surface

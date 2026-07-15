@@ -460,6 +460,13 @@ function Window.new(config, notifications, flags, onChanged)
 
 	local toggleKey = Enum.KeyCode[config.ToggleKey or "K"]
 
+	-- Off-limits for keybind elements: a rebind pressing this key cancels instead of stealing
+	-- the shortcut that opens and closes the whole window.
+	Keybind.Reserve(toggleKey.Name)
+	vide.cleanup(function()
+		Keybind.Unreserve(toggleKey.Name)
+	end)
+
 	local scale = source(1)
 	local minimized = source(false)
 
@@ -600,6 +607,18 @@ function Window:CreateTab(name: string, icon: (string | number)?)
 	end
 
 	return tab
+end
+
+-- Stops everything the elements started, across every tab. Called once as the UI is torn
+-- down, so a toggled-on feature does not keep its loop running after its switch is gone.
+function Window:TeardownAll()
+	for _, tab in self.tabs() do
+		for _, child in tab.children() do
+			if child.Teardown then
+				child:Teardown()
+			end
+		end
+	end
 end
 
 function Window:SelectTab(tab)

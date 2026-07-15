@@ -217,6 +217,12 @@ function PixlLib:CreateWindow(config)
 
 	self._window = window
 	self._unmount = function()
+		-- Stop the running features FIRST, while the elements and their callbacks still
+		-- exist. This is the manual "turn everything off before unloading" that a caller used
+		-- to have to write by hand - now it is unavoidable, so a reload can never leave an
+		-- orphaned loop firing remotes with no switch left to stop it.
+		window:TeardownAll()
+
 		destroyScope()
 		if window.node then
 			window.node:Destroy()
@@ -420,6 +426,21 @@ local indexes = vide.indexes
 local spring = vide.spring
 local changed = vide.changed
 
+-- The open panel is measured, not guessed: it is exactly as tall as the rows it holds - the
+-- search row plus one row per option that survives the search - and stops growing at
+-- MAX_ROWS, from where the list scrolls. A fixed height left a two-option dropdown with two
+-- empty slots below it.
+local ROW_HEIGHT = 60
+local ROW_GAP = 12 -- UIListLayout padding between the rows
+local PANEL_PADDING = 8 -- the scroll frame's own UIPadding, top + bottom
+local HEADER_GAP = 10 -- the panel starts 10px below the 60px header
+local MAX_ROWS = 4 -- search row + 3 options before it scrolls
+
+local function panelHeightFor(rowCount: number): number
+	local rows = math.min(rowCount, MAX_ROWS)
+	return rows * ROW_HEIGHT + (rows - 1) * ROW_GAP + PANEL_PADDING + HEADER_GAP
+end
+
 local Dropdown = {}
 
 function Dropdown.new(config, onChanged)
@@ -503,8 +524,28 @@ function Dropdown.new(config, onChanged)
 			return if open() then 180 else 0
 		end, 0.3)
 
+		-- The options the search leaves standing. Both the row list and the panel height read
+		-- this, so they can never disagree about how many rows there are.
+		local function visibleOptions()
+			local query = searchText():lower()
+			local matches = {}
+
+			for _, optionName in optionList() do
+				if string.find(optionName:lower(), query, 1, true) then
+					table.insert(matches, optionName)
+				end
+			end
+
+			return matches
+		end
+
 		local panelHeight = spring(function() -- single height source for the whole expand/collapse
-			return if open() then 294 else 0
+			if not open() then
+				return 0
+			end
+
+			-- +1 for the fixed search row, which is a row like any other
+			return panelHeightFor(1 + #visibleOptions())
 		end, 0.3)
 
 		local function allSelected()
@@ -771,17 +812,7 @@ function Dropdown.new(config, onChanged)
 					}),
 				}),
 
-				indexes(function()
-					local query = searchText():lower()
-					local matches = {}
-					for _, optionName in optionList() do
-						if string.find(optionName:lower(), query, 1, true) then
-							table.insert(matches, optionName)
-						end
-					end
-
-					return matches
-				end, function(option, i)
+				indexes(visibleOptions, function(option, i)
 					local optionHovered = source(false)
 					local optionBg = spring(function() -- rests on surface over the dark backdrop, hovers one step up
 						return if optionHovered() then Colors.surfaceHover else Colors.surface
@@ -964,6 +995,11 @@ function Element.new(kind: string, config, impl)
 		self.name(tostring(text))
 	end
 
+	-- Optional: called when the whole UI is torn down. An element that represents something
+	-- running (a Toggle that is on) uses it to stop that thing - WITHOUT touching its value,
+	-- so the saved config is left as the user left it. Elements that run nothing leave it nil.
+	self._teardown = impl and impl.teardown
+
 	-- Filled in by Tab:addChild, which is the only thing that can take us out of the tree
 	self._remove = nil
 
@@ -1005,6 +1041,14 @@ function Element:Destroy()
 	if self._remove then
 		self._remove()
 		self._remove = nil
+	end
+end
+
+-- Called once, when the UI is being torn down. Stops whatever the element started; does not
+-- touch its value.
+function Element:Teardown()
+	if self._teardown then
+		self._teardown()
 	end
 end
 
@@ -1264,15 +1308,27 @@ function Keybind.IsCapturing(): boolean
 	return capturing > 0
 end
 
--- Binds a key to a callback, and lets the user rebind it by clicking the element and pressing
--- the new key. The stored value is the KeyCode's *name* ("F", "LeftAlt"), because that is what
--- survives a round trip through the JSON config - an EnumItem does not.
+-- Keys a badge refuses to bind, by KeyCode name. The window registers its own toggle key
+-- here, so a rebind can never steal it - pressing it during capture cancels instead.
+local reservedKeys = {}
+
+function Keybind.Reserve(keyName: string)
+	reservedKeys[keyName] = true
+end
+
+function Keybind.Unreserve(keyName: string)
+	reservedKeys[keyName] = nil
+end
+
+-- The reusable half of a keybind: the key it holds, the listeners that watch for it, and the
+-- pill you click to rebind. It owns no row, so a Toggle (or anything else) can place it next
+-- to its own controls - the standalone Keybind element below is just this badge in a row.
 --
--- Two behaviours, like Rayfield:
---   HoldToInteract = false (default) -> callback fires once on press
---   HoldToInteract = true            -> callback fires with true on press and false on release
-function Keybind.new(config, onChanged)
-	local callback = config.Callback
+-- config:    { CurrentKeybind = "L", HoldToInteract = false }
+-- onFire:    runs when the key is pressed. With HoldToInteract it also runs on release, with
+--            `false` - the same contract the standalone element's Callback has.
+-- onChanged: config persistence hook, fired when the key itself is rebound
+function Keybind.newBadge(config, onFire, onChanged)
 	local holdToInteract = config.HoldToInteract or false
 
 	local key = source(config.CurrentKeybind or "K")
@@ -1285,7 +1341,19 @@ function Keybind.new(config, onChanged)
 		end
 
 		listening(value)
-		capturing += if value then 1 else -1
+
+		if value then
+			capturing += 1
+		else
+			-- Release on the NEXT frame, not now. The keypress that ends a rebind is still
+			-- being handed to the other InputBegan listeners - the window's toggle-key
+			-- handler among them - and they must all still see the lock, whatever order they
+			-- run in. Dropping it here would let a handler that runs after us act on the very
+			-- key we just consumed.
+			task.defer(function()
+				capturing -= 1
+			end)
+		end
 	end
 
 	local function setValue(newKey, fire)
@@ -1309,24 +1377,14 @@ function Keybind.new(config, onChanged)
 		end
 	end
 
-	local keybind = Element.new("Keybind", config, {
+	local badge = {
+		key = key,
 		get = key,
 		set = setValue,
-	})
+	}
 
-	local name = keybind.name
-
-	function keybind:render()
-		local hovered = source(false)
-
-		local bgColor = spring(function()
-			return if hovered() then Colors.surfaceHover else Colors.surface
-		end, 0.3)
-
-		local boxColor = spring(function() -- the key pill lights up while it waits for input
-			return if listening() then Colors.accent else Colors.bg
-		end, 0.2)
-
+	-- The pill. Whoever embeds it decides where it sits; it brings its own listeners.
+	function badge.render()
 		local beganConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			if input.UserInputType ~= Enum.UserInputType.Keyboard then
 				return
@@ -1336,7 +1394,13 @@ function Keybind.new(config, onChanged)
 			-- typing INTO our element, not into the game.
 			if listening() then
 				setListening(false)
-				setValue(input.KeyCode.Name, true)
+
+				-- Escape cancels and keeps the old key (nobody means to farm on the pause
+				-- key), and so does any reserved key - the window's toggle key can never be
+				-- stolen by a rebind.
+				if input.KeyCode ~= Enum.KeyCode.Escape and not reservedKeys[input.KeyCode.Name] then
+					setValue(input.KeyCode.Name, true)
+				end
 				return
 			end
 
@@ -1346,11 +1410,9 @@ function Keybind.new(config, onChanged)
 
 			if holdToInteract then
 				held(true)
-				if callback then
-					callback(true)
-				end
-			elseif callback then
-				callback()
+				onFire(true)
+			else
+				onFire()
 			end
 		end)
 		vide.cleanup(beganConn)
@@ -1360,11 +1422,11 @@ function Keybind.new(config, onChanged)
 				return
 			end
 
+			-- Only release what we actually caught pressing: a key let go over the UI or in a
+			-- text box must not fire a ghost `false`.
 			if input.KeyCode.Name == key() and held() then
 				held(false)
-				if callback then
-					callback(false)
-				end
+				onFire(false)
 			end
 		end)
 		vide.cleanup(endedConn)
@@ -1374,53 +1436,42 @@ function Keybind.new(config, onChanged)
 			setListening(false)
 		end)
 
+		local hovered = source(false)
+
+		local boxColor = spring(function() -- lights up while it waits for the new key
+			if listening() then
+				return Colors.accent
+			end
+			return if hovered() then Colors.surfaceHigh2 else Colors.bg
+		end, 0.2)
+
 		return create("Frame")({
-			Size = UDim2.new(0.98, 0, 0, 60),
-			BackgroundColor3 = bgColor,
-			Visible = keybind.visible,
+			Size = UDim2.fromOffset(70, 34),
+			BackgroundColor3 = boxColor,
+			ZIndex = 2, -- above the row's click overlay, so the pill takes its own clicks
 
-			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+			create("UIStroke")({ Color = Colors.stroke, Thickness = 1.5 }),
 
-			create("TextLabel")({ -- name on the left
-				Size = UDim2.new(1, -140, 0.6, 0),
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 16, 0.5, 0),
+			create("TextLabel")({
+				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
+				ZIndex = 2,
 
-				Text = name,
+				Text = function()
+					return if listening() then "..." else key()
+				end,
 				TextColor3 = Colors.textPrimary,
-				TextSize = 22,
-				TextXAlignment = "Left",
+				TextSize = 20,
+				TextTruncate = "AtEnd",
 				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
-			}),
-
-			create("Frame")({ -- the key pill
-				Size = UDim2.fromOffset(96, 34),
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -16, 0.5, 0),
-				BackgroundColor3 = boxColor,
-
-				create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
-				create("UIStroke")({ Color = Colors.stroke, Thickness = 1.5 }),
-
-				create("TextLabel")({
-					Size = UDim2.fromScale(1, 1),
-					BackgroundTransparency = 1,
-
-					Text = function()
-						return if listening() then "..." else key()
-					end,
-					TextColor3 = Colors.textPrimary,
-					TextSize = 20,
-					TextTruncate = "AtEnd",
-					FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
-				}),
 			}),
 
 			create("TextButton")({
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
 				Text = "",
+				ZIndex = 3,
 
 				MouseEnter = function()
 					hovered(true)
@@ -1432,6 +1483,78 @@ function Keybind.new(config, onChanged)
 				Activated = function()
 					setListening(not listening()) -- click again to cancel
 				end,
+			}),
+		})
+	end
+
+	return badge
+end
+
+-- The standalone element: the badge, in a row of its own.
+function Keybind.new(config, onChanged)
+	local callback = config.Callback
+
+	local badge = Keybind.newBadge(config, function(...)
+		if callback then
+			callback(...)
+		end
+	end, onChanged)
+
+	local keybind = Element.new("Keybind", config, {
+		get = badge.get,
+		set = badge.set,
+	})
+
+	local name = keybind.name
+
+	function keybind:render()
+		local hovered = source(false)
+
+		local bgColor = spring(function()
+			return if hovered() then Colors.surfaceHover else Colors.surface
+		end, 0.3)
+
+		return create("Frame")({
+			Size = UDim2.new(0.98, 0, 0, 60),
+			BackgroundColor3 = bgColor,
+			Visible = keybind.visible,
+
+			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+			create("TextLabel")({ -- name on the left
+				Size = UDim2.new(1, -110, 0.6, 0),
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 16, 0.5, 0),
+				BackgroundTransparency = 1,
+
+				Text = name,
+				TextColor3 = Colors.textPrimary,
+				TextSize = 22,
+				TextXAlignment = "Left",
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
+			}),
+
+			create("TextButton")({ -- row hover; the badge sits above it and eats its own clicks
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Text = "",
+
+				MouseEnter = function()
+					hovered(true)
+				end,
+				MouseLeave = function()
+					hovered(false)
+				end,
+			}),
+
+			create("Frame")({ -- anchors the badge to the right edge
+				Size = UDim2.fromOffset(70, 34),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -16, 0.5, 0),
+				BackgroundTransparency = 1,
+				ZIndex = 2,
+
+				badge.render(),
 			}),
 		})
 	end
@@ -1464,7 +1587,7 @@ function Label.new(config)
 
 			Text = name,
 			TextColor3 = color,
-			TextSize = 24,
+			TextSize = 32,
 			TextXAlignment = "Left",
 			TextYAlignment = "Bottom",
 
@@ -1674,26 +1797,50 @@ local Element = require("./Element")
 
 local create = vide.create
 
+-- A section belongs to what comes AFTER it, not before. So it carries its breathing room on
+-- top: a wide gap that separates it from the previous group, and only the list's normal
+-- spacing below, which glues it to the elements it heads.
+--
+-- The exception is the first element of a tab. There is no previous group to separate from,
+-- so the gap would just be a dent at the top of the page - it is dropped in that case.
+local ROW_HEIGHT = 30
+local TOP_GAP = 16
+
 local Section = {}
 
--- A heading that groups the elements under it. Where a Label is body text at full contrast,
--- a Section is a quiet, small-caps-ish marker that the eye skims past until it needs it -
--- muted colour, letter spacing, a rule to its right.
 function Section.new(config)
 	local section = Element.new("Section", config)
 	local name = section.name
 
 	function section:render()
+		-- isFirst is handed to us by Tab:addChild and reads the tab's child list, so this
+		-- follows along if the element order changes later.
+		local function topGap()
+			return if section.isFirst and section.isFirst() then 0 else TOP_GAP
+		end
+
 		return create("Frame")({
-			Size = UDim2.new(0.98, 0, 0, 30),
+			Size = function()
+				return UDim2.new(0.98, 0, 0, ROW_HEIGHT + topGap())
+			end,
 			BackgroundTransparency = 1,
 			Visible = section.visible,
 
+			-- The padding below shrinks the content area from the top, so centering inside it
+			-- keeps the heading exactly as it looked - the gap simply appears above it.
 			create("UIListLayout")({
 				FillDirection = "Horizontal",
 				VerticalAlignment = "Center",
 				Padding = UDim.new(0, 10),
 				SortOrder = "LayoutOrder",
+			}),
+
+			create("UIPadding")({
+				PaddingTop = function()
+					return UDim.new(0, topGap())
+				end,
+				PaddingLeft = UDim.new(0, 6),
+				PaddingRight = UDim.new(0, 6),
 			}),
 
 			create("TextLabel")({
@@ -1704,13 +1851,13 @@ function Section.new(config)
 
 				Text = name,
 				TextColor3 = Colors.textMuted,
-				TextSize = 18,
+				TextSize = 22,
 				TextXAlignment = "Left",
 				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
 			}),
 
 			create("Frame")({ -- rule filling the rest of the row
-				Size = UDim2.new(1, 0, 0, 1),
+				Size = UDim2.new(1, 0, 0, 3),
 				LayoutOrder = 2,
 				BackgroundColor3 = Colors.stroke,
 				BorderSizePixel = 0,
@@ -1962,12 +2109,31 @@ function Tab.new(name, icon, flags, onChanged)
 		table.insert(new, handle)
 		tab.children(new)
 
-		if handle.flag then
-			if flags[handle.flag] then
-				warn(`[PixlLib] duplicate Flag "{handle.flag}" - the config will only keep one of them`)
-			end
-			flags[handle.flag] = handle
+		-- Reads the child list, so it re-evaluates on its own when elements come and go.
+		-- A Section uses it to drop the gap it would otherwise put above itself: that gap
+		-- exists to separate it from the group before it, and at the top of a tab there is
+		-- no group before it.
+		handle.isFirst = function()
+			return tab.children()[1] == handle
 		end
+
+		local function register(element)
+			if not (element and element.flag) then
+				return
+			end
+
+			if flags[element.flag] then
+				warn(`[PixlLib] duplicate Flag "{element.flag}" - the config will only keep one of them`)
+			end
+			flags[element.flag] = element
+		end
+
+		register(handle)
+
+		-- An element may carry an inline keybind (a Toggle with Keybind = {...}). It is a
+		-- value in its own right, so it gets its own flag entry and is saved and reachable
+		-- like any other: PixlLib.Flags.AutoFarmKey:Get()
+		register(handle.keybind)
 
 		handle._remove = function()
 			local remaining = {}
@@ -1978,8 +2144,10 @@ function Tab.new(name, icon, flags, onChanged)
 			end
 			tab.children(remaining)
 
-			if handle.flag and flags[handle.flag] == handle then
-				flags[handle.flag] = nil
+			for _, element in { handle, handle.keybind } do
+				if element.flag and flags[element.flag] == element then
+					flags[element.flag] = nil
+				end
 			end
 		end
 
@@ -2042,6 +2210,7 @@ end)() end,
     function()local wax,script,require=ImportGlobals(17)local ImportGlobals return (function(...)local vide = require("./Packages/vide")
 local Colors = require("./Colors")
 local Element = require("./Element")
+local Keybind = require("./Keybind")
 
 local create = vide.create
 local source = vide.source
@@ -2050,6 +2219,10 @@ local spring = vide.spring
 -- thumb positions inside the track (scale, so it scales with the track)
 local THUMB_OFF = UDim2.fromScale(0.28, 0.5)
 local THUMB_ON = UDim2.fromScale(0.72, 0.5)
+
+local SWITCH_WIDTH = 52
+local BADGE_WIDTH = 70
+local GAP = 12 -- between the badge and the switch
 
 local Toggle = {}
 
@@ -2079,9 +2252,44 @@ function Toggle.new(config, onChanged)
 	local toggle = Element.new("Toggle", config, {
 		get = on,
 		set = setValue,
+
+		-- On teardown, an on-toggle stops its feature. We call the callback directly with
+		-- false rather than setValue(false), so the toggle's stored value stays true and a
+		-- saved config still reflects what the user had on - the feature stops, the setting
+		-- survives.
+		teardown = function()
+			if on() and callback then
+				callback(false)
+			end
+		end,
 	})
 
 	local name = toggle.name
+
+	-- Optional inline keybind. The key drives the TOGGLE, not the feature behind it, so the
+	-- switch always shows what is really running - same reason :Set() fires callbacks.
+	--   HoldToInteract = false -> the key flips the toggle
+	--   HoldToInteract = true  -> the toggle is on only while the key is held
+	local badge = nil
+
+	if config.Keybind then
+		local keyConfig = config.Keybind
+
+		badge = Keybind.newBadge(keyConfig, function(held)
+			if keyConfig.HoldToInteract then
+				setValue(held, true)
+			else
+				setValue(not on(), true)
+			end
+		end, onChanged)
+
+		-- A handle of its own, so the key is saved and reachable like any other value:
+		-- PixlLib.Flags.AutoFarmKey:Get() -> "L"
+		toggle.keybind = Element.new("Keybind", keyConfig, {
+			get = badge.get,
+			set = badge.set,
+		})
+	end
 
 	function toggle:render()
 		local hovered = source(false)
@@ -2097,6 +2305,10 @@ function Toggle.new(config, onChanged)
 			return if on() then THUMB_ON else THUMB_OFF
 		end, 0.3)
 
+		-- What the name has to give up on the right: the switch always, the badge only if
+		-- there is one. No keybind, no gap - the row looks exactly as it did before.
+		local rightInset = 20 + SWITCH_WIDTH + (if badge then GAP + BADGE_WIDTH else 0)
+
 		return create("Frame")({
 			Size = UDim2.new(0.98, 0, 0, 60),
 			BackgroundColor3 = bgColor,
@@ -2105,7 +2317,7 @@ function Toggle.new(config, onChanged)
 			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
 
 			create("TextLabel")({ -- name on the left
-				Size = UDim2.new(1, -84, 0.6, 0),
+				Size = UDim2.new(1, -(rightInset + 32), 0.6, 0),
 				AnchorPoint = Vector2.new(0, 0.5),
 				Position = UDim2.new(0, 16, 0.5, 0),
 				BackgroundTransparency = 1,
@@ -2114,11 +2326,12 @@ function Toggle.new(config, onChanged)
 				TextColor3 = Colors.textPrimary,
 				TextSize = 22,
 				TextXAlignment = "Left",
+				TextTruncate = "AtEnd",
 				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 			}),
 
 			create("Frame")({ -- switch track
-				Size = UDim2.fromOffset(52, 28),
+				Size = UDim2.fromOffset(SWITCH_WIDTH, 28),
 				AnchorPoint = Vector2.new(1, 0.5),
 				Position = UDim2.new(1, -20, 0.5, 0),
 				BackgroundColor3 = trackColor,
@@ -2136,7 +2349,7 @@ function Toggle.new(config, onChanged)
 				}),
 			}),
 
-			create("TextButton")({
+			create("TextButton")({ -- click anywhere on the row flips it
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
 				Text = "",
@@ -2152,6 +2365,20 @@ function Toggle.new(config, onChanged)
 					setValue(not on(), true)
 				end,
 			}),
+
+			-- Left of the switch, and created AFTER the click overlay on purpose: the badge
+			-- must sit on top of it, or the overlay swallows the click meant for rebinding.
+			if badge
+				then create("Frame")({
+					Size = UDim2.fromOffset(BADGE_WIDTH, 34),
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -(20 + SWITCH_WIDTH + GAP), 0.5, 0),
+					BackgroundTransparency = 1,
+					ZIndex = 2,
+
+					badge.render(),
+				})
+				else nil,
 		})
 	end
 
@@ -2623,6 +2850,13 @@ function Window.new(config, notifications, flags, onChanged)
 
 	local toggleKey = Enum.KeyCode[config.ToggleKey or "K"]
 
+	-- Off-limits for keybind elements: a rebind pressing this key cancels instead of stealing
+	-- the shortcut that opens and closes the whole window.
+	Keybind.Reserve(toggleKey.Name)
+	vide.cleanup(function()
+		Keybind.Unreserve(toggleKey.Name)
+	end)
+
 	local scale = source(1)
 	local minimized = source(false)
 
@@ -2763,6 +2997,18 @@ function Window:CreateTab(name: string, icon: (string | number)?)
 	end
 
 	return tab
+end
+
+-- Stops everything the elements started, across every tab. Called once as the UI is torn
+-- down, so a toggled-on feature does not keep its loop running after its switch is gone.
+function Window:TeardownAll()
+	for _, tab in self.tabs() do
+		for _, child in tab.children() do
+			if child.Teardown then
+				child:Teardown()
+			end
+		end
+	end
 end
 
 function Window:SelectTab(tab)
@@ -4964,17 +5210,87 @@ local ObjectTree = {
                 },
                 {
                     {
+                        10,
+                        2,
+                        {
+                            "Keybind"
+                        }
+                    },
+                    {
+                        17,
+                        2,
+                        {
+                            "Toggle"
+                        }
+                    },
+                    {
+                        3,
+                        2,
+                        {
+                            "Button"
+                        }
+                    },
+                    {
+                        14,
+                        2,
+                        {
+                            "Section"
+                        }
+                    },
+                    {
+                        4,
+                        2,
+                        {
+                            "Colors"
+                        }
+                    },
+                    {
+                        6,
+                        2,
+                        {
+                            "Dropdown"
+                        }
+                    },
+                    {
+                        9,
+                        2,
+                        {
+                            "InputBox"
+                        }
+                    },
+                    {
+                        5,
+                        2,
+                        {
+                            "Divider"
+                        }
+                    },
+                    {
+                        16,
+                        2,
+                        {
+                            "Tab"
+                        }
+                    },
+                    {
+                        13,
+                        2,
+                        {
+                            "Paragraph"
+                        }
+                    },
+                    {
+                        11,
+                        2,
+                        {
+                            "Label"
+                        }
+                    },
+                    {
                         12,
                         2,
                         {
                             "Notification"
-                        }
-                    },
-                    {
-                        15,
-                        2,
-                        {
-                            "Slider"
                         }
                     },
                     {
@@ -5006,52 +5322,10 @@ local ObjectTree = {
                                                 },
                                                 {
                                                     {
-                                                        26,
-                                                        2,
-                                                        {
-                                                            "branch"
-                                                        }
-                                                    },
-                                                    {
-                                                        28,
-                                                        2,
-                                                        {
-                                                            "cleanup"
-                                                        }
-                                                    },
-                                                    {
                                                         30,
                                                         2,
                                                         {
                                                             "create"
-                                                        }
-                                                    },
-                                                    {
-                                                        33,
-                                                        2,
-                                                        {
-                                                            "effect"
-                                                        }
-                                                    },
-                                                    {
-                                                        48,
-                                                        2,
-                                                        {
-                                                            "values"
-                                                        }
-                                                    },
-                                                    {
-                                                        24,
-                                                        2,
-                                                        {
-                                                            "apply"
-                                                        }
-                                                    },
-                                                    {
-                                                        47,
-                                                        2,
-                                                        {
-                                                            "untrack"
                                                         }
                                                     },
                                                     {
@@ -5062,45 +5336,10 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        29,
+                                                        39,
                                                         2,
                                                         {
-                                                            "context"
-                                                        }
-                                                    },
-                                                    {
-                                                        34,
-                                                        2,
-                                                        {
-                                                            "flags"
-                                                        }
-                                                    },
-                                                    {
-                                                        35,
-                                                        2,
-                                                        {
-                                                            "graph"
-                                                        }
-                                                    },
-                                                    {
-                                                        37,
-                                                        2,
-                                                        {
-                                                            "indexes"
-                                                        }
-                                                    },
-                                                    {
-                                                        31,
-                                                        2,
-                                                        {
-                                                            "defaults"
-                                                        }
-                                                    },
-                                                    {
-                                                        36,
-                                                        2,
-                                                        {
-                                                            "implicit_effect"
+                                                            "mount"
                                                         }
                                                     },
                                                     {
@@ -5111,45 +5350,45 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        44,
+                                                        26,
                                                         2,
                                                         {
-                                                            "spring"
+                                                            "branch"
                                                         }
                                                     },
                                                     {
-                                                        41,
+                                                        24,
                                                         2,
                                                         {
-                                                            "root"
+                                                            "apply"
                                                         }
                                                     },
                                                     {
-                                                        40,
+                                                        32,
                                                         2,
                                                         {
-                                                            "read"
+                                                            "derive"
                                                         }
                                                     },
                                                     {
-                                                        42,
+                                                        48,
                                                         2,
                                                         {
-                                                            "show"
+                                                            "values"
                                                         }
                                                     },
                                                     {
-                                                        43,
+                                                        33,
                                                         2,
                                                         {
-                                                            "source"
+                                                            "effect"
                                                         }
                                                     },
                                                     {
-                                                        39,
+                                                        47,
                                                         2,
                                                         {
-                                                            "mount"
+                                                            "untrack"
                                                         }
                                                     },
                                                     {
@@ -5160,10 +5399,10 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        38,
+                                                        40,
                                                         2,
                                                         {
-                                                            "lib"
+                                                            "read"
                                                         }
                                                     },
                                                     {
@@ -5174,10 +5413,87 @@ local ObjectTree = {
                                                         }
                                                     },
                                                     {
-                                                        32,
+                                                        31,
                                                         2,
                                                         {
-                                                            "derive"
+                                                            "defaults"
+                                                        }
+                                                    },
+                                                    {
+                                                        38,
+                                                        2,
+                                                        {
+                                                            "lib"
+                                                        }
+                                                    },
+                                                    {
+                                                        41,
+                                                        2,
+                                                        {
+                                                            "root"
+                                                        }
+                                                    },
+                                                    {
+                                                        44,
+                                                        2,
+                                                        {
+                                                            "spring"
+                                                        }
+                                                    },
+                                                    {
+                                                        43,
+                                                        2,
+                                                        {
+                                                            "source"
+                                                        }
+                                                    },
+                                                    {
+                                                        28,
+                                                        2,
+                                                        {
+                                                            "cleanup"
+                                                        }
+                                                    },
+                                                    {
+                                                        42,
+                                                        2,
+                                                        {
+                                                            "show"
+                                                        }
+                                                    },
+                                                    {
+                                                        34,
+                                                        2,
+                                                        {
+                                                            "flags"
+                                                        }
+                                                    },
+                                                    {
+                                                        37,
+                                                        2,
+                                                        {
+                                                            "indexes"
+                                                        }
+                                                    },
+                                                    {
+                                                        36,
+                                                        2,
+                                                        {
+                                                            "implicit_effect"
+                                                        }
+                                                    },
+                                                    {
+                                                        35,
+                                                        2,
+                                                        {
+                                                            "graph"
+                                                        }
+                                                    },
+                                                    {
+                                                        29,
+                                                        2,
+                                                        {
+                                                            "context"
                                                         }
                                                     },
                                                     {
@@ -5203,17 +5519,10 @@ local ObjectTree = {
                         }
                     },
                     {
-                        8,
+                        15,
                         2,
                         {
-                            "Icons"
-                        }
-                    },
-                    {
-                        13,
-                        2,
-                        {
-                            "Paragraph"
+                            "Slider"
                         }
                     },
                     {
@@ -5224,69 +5533,6 @@ local ObjectTree = {
                         }
                     },
                     {
-                        6,
-                        2,
-                        {
-                            "Dropdown"
-                        }
-                    },
-                    {
-                        11,
-                        2,
-                        {
-                            "Label"
-                        }
-                    },
-                    {
-                        17,
-                        2,
-                        {
-                            "Toggle"
-                        }
-                    },
-                    {
-                        5,
-                        2,
-                        {
-                            "Divider"
-                        }
-                    },
-                    {
-                        3,
-                        2,
-                        {
-                            "Button"
-                        }
-                    },
-                    {
-                        16,
-                        2,
-                        {
-                            "Tab"
-                        }
-                    },
-                    {
-                        14,
-                        2,
-                        {
-                            "Section"
-                        }
-                    },
-                    {
-                        4,
-                        2,
-                        {
-                            "Colors"
-                        }
-                    },
-                    {
-                        10,
-                        2,
-                        {
-                            "Keybind"
-                        }
-                    },
-                    {
                         7,
                         2,
                         {
@@ -5294,10 +5540,10 @@ local ObjectTree = {
                         }
                     },
                     {
-                        9,
+                        8,
                         2,
                         {
-                            "InputBox"
+                            "Icons"
                         }
                     }
                 }
@@ -5310,50 +5556,50 @@ local ObjectTree = {
 local LineOffsets = {
     8,
     11,
-    270,
-    357,
-    378,
-    413,
-    911,
-    1014,
-    1088,
-    1246,
-    1445,
-    1481,
-    1596,
-    1671,
-    1729,
-    1931,
-    2042,
-    2164,
-    [22] = 2801,
-    [23] = 2813,
-    [24] = 2840,
-    [25] = 3004,
-    [26] = 3029,
-    [27] = 3071,
-    [28] = 3091,
-    [29] = 3136,
-    [30] = 3212,
-    [31] = 3324,
-    [32] = 3439,
-    [33] = 3459,
-    [34] = 3473,
-    [35] = 3487,
-    [36] = 3810,
-    [37] = 3937,
-    [38] = 4060,
-    [39] = 4182,
-    [40] = 4195,
-    [41] = 4202,
-    [42] = 4239,
-    [43] = 4277,
-    [44] = 4310,
-    [45] = 4640,
-    [46] = 4756,
-    [47] = 4785,
-    [48] = 4812,
-    [49] = 4945
+    276,
+    363,
+    384,
+    419,
+    942,
+    1058,
+    1132,
+    1290,
+    1568,
+    1604,
+    1719,
+    1794,
+    1876,
+    2078,
+    2210,
+    2391,
+    [22] = 3047,
+    [23] = 3059,
+    [24] = 3086,
+    [25] = 3250,
+    [26] = 3275,
+    [27] = 3317,
+    [28] = 3337,
+    [29] = 3382,
+    [30] = 3458,
+    [31] = 3570,
+    [32] = 3685,
+    [33] = 3705,
+    [34] = 3719,
+    [35] = 3733,
+    [36] = 4056,
+    [37] = 4183,
+    [38] = 4306,
+    [39] = 4428,
+    [40] = 4441,
+    [41] = 4448,
+    [42] = 4485,
+    [43] = 4523,
+    [44] = 4556,
+    [45] = 4886,
+    [46] = 5002,
+    [47] = 5031,
+    [48] = 5058,
+    [49] = 5191
 }
 
 -- Misc AOT variable imports

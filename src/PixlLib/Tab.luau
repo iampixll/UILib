@@ -32,12 +32,31 @@ function Tab.new(name, icon, flags, onChanged)
 		table.insert(new, handle)
 		tab.children(new)
 
-		if handle.flag then
-			if flags[handle.flag] then
-				warn(`[PixlLib] duplicate Flag "{handle.flag}" - the config will only keep one of them`)
-			end
-			flags[handle.flag] = handle
+		-- Reads the child list, so it re-evaluates on its own when elements come and go.
+		-- A Section uses it to drop the gap it would otherwise put above itself: that gap
+		-- exists to separate it from the group before it, and at the top of a tab there is
+		-- no group before it.
+		handle.isFirst = function()
+			return tab.children()[1] == handle
 		end
+
+		local function register(element)
+			if not (element and element.flag) then
+				return
+			end
+
+			if flags[element.flag] then
+				warn(`[PixlLib] duplicate Flag "{element.flag}" - the config will only keep one of them`)
+			end
+			flags[element.flag] = element
+		end
+
+		register(handle)
+
+		-- An element may carry an inline keybind (a Toggle with Keybind = {...}). It is a
+		-- value in its own right, so it gets its own flag entry and is saved and reachable
+		-- like any other: PixlLib.Flags.AutoFarmKey:Get()
+		register(handle.keybind)
 
 		handle._remove = function()
 			local remaining = {}
@@ -48,8 +67,10 @@ function Tab.new(name, icon, flags, onChanged)
 			end
 			tab.children(remaining)
 
-			if handle.flag and flags[handle.flag] == handle then
-				flags[handle.flag] = nil
+			for _, element in { handle, handle.keybind } do
+				if element.flag and flags[element.flag] == element then
+					flags[element.flag] = nil
+				end
 			end
 		end
 

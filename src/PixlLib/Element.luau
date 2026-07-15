@@ -54,6 +54,11 @@ function Element.new(kind: string, config, impl)
 		self.name(tostring(text))
 	end
 
+	-- Optional: called when the whole UI is torn down. An element that represents something
+	-- running (a Toggle that is on) uses it to stop that thing - WITHOUT touching its value,
+	-- so the saved config is left as the user left it. Elements that run nothing leave it nil.
+	self._teardown = impl and impl.teardown
+
 	-- Filled in by Tab:addChild, which is the only thing that can take us out of the tree
 	self._remove = nil
 
@@ -95,6 +100,14 @@ function Element:Destroy()
 	if self._remove then
 		self._remove()
 		self._remove = nil
+	end
+end
+
+-- Called once, when the UI is being torn down. Stops whatever the element started; does not
+-- touch its value.
+function Element:Teardown()
+	if self._teardown then
+		self._teardown()
 	end
 end
 

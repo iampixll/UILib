@@ -19,15 +19,27 @@ function Keybind.IsCapturing(): boolean
 	return capturing > 0
 end
 
--- Binds a key to a callback, and lets the user rebind it by clicking the element and pressing
--- the new key. The stored value is the KeyCode's *name* ("F", "LeftAlt"), because that is what
--- survives a round trip through the JSON config - an EnumItem does not.
+-- Keys a badge refuses to bind, by KeyCode name. The window registers its own toggle key
+-- here, so a rebind can never steal it - pressing it during capture cancels instead.
+local reservedKeys = {}
+
+function Keybind.Reserve(keyName: string)
+	reservedKeys[keyName] = true
+end
+
+function Keybind.Unreserve(keyName: string)
+	reservedKeys[keyName] = nil
+end
+
+-- The reusable half of a keybind: the key it holds, the listeners that watch for it, and the
+-- pill you click to rebind. It owns no row, so a Toggle (or anything else) can place it next
+-- to its own controls - the standalone Keybind element below is just this badge in a row.
 --
--- Two behaviours, like Rayfield:
---   HoldToInteract = false (default) -> callback fires once on press
---   HoldToInteract = true            -> callback fires with true on press and false on release
-function Keybind.new(config, onChanged)
-	local callback = config.Callback
+-- config:    { CurrentKeybind = "L", HoldToInteract = false }
+-- onFire:    runs when the key is pressed. With HoldToInteract it also runs on release, with
+--            `false` - the same contract the standalone element's Callback has.
+-- onChanged: config persistence hook, fired when the key itself is rebound
+function Keybind.newBadge(config, onFire, onChanged)
 	local holdToInteract = config.HoldToInteract or false
 
 	local key = source(config.CurrentKeybind or "K")
@@ -40,7 +52,19 @@ function Keybind.new(config, onChanged)
 		end
 
 		listening(value)
-		capturing += if value then 1 else -1
+
+		if value then
+			capturing += 1
+		else
+			-- Release on the NEXT frame, not now. The keypress that ends a rebind is still
+			-- being handed to the other InputBegan listeners - the window's toggle-key
+			-- handler among them - and they must all still see the lock, whatever order they
+			-- run in. Dropping it here would let a handler that runs after us act on the very
+			-- key we just consumed.
+			task.defer(function()
+				capturing -= 1
+			end)
+		end
 	end
 
 	local function setValue(newKey, fire)
@@ -64,24 +88,14 @@ function Keybind.new(config, onChanged)
 		end
 	end
 
-	local keybind = Element.new("Keybind", config, {
+	local badge = {
+		key = key,
 		get = key,
 		set = setValue,
-	})
+	}
 
-	local name = keybind.name
-
-	function keybind:render()
-		local hovered = source(false)
-
-		local bgColor = spring(function()
-			return if hovered() then Colors.surfaceHover else Colors.surface
-		end, 0.3)
-
-		local boxColor = spring(function() -- the key pill lights up while it waits for input
-			return if listening() then Colors.accent else Colors.bg
-		end, 0.2)
-
+	-- The pill. Whoever embeds it decides where it sits; it brings its own listeners.
+	function badge.render()
 		local beganConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 			if input.UserInputType ~= Enum.UserInputType.Keyboard then
 				return
@@ -91,7 +105,13 @@ function Keybind.new(config, onChanged)
 			-- typing INTO our element, not into the game.
 			if listening() then
 				setListening(false)
-				setValue(input.KeyCode.Name, true)
+
+				-- Escape cancels and keeps the old key (nobody means to farm on the pause
+				-- key), and so does any reserved key - the window's toggle key can never be
+				-- stolen by a rebind.
+				if input.KeyCode ~= Enum.KeyCode.Escape and not reservedKeys[input.KeyCode.Name] then
+					setValue(input.KeyCode.Name, true)
+				end
 				return
 			end
 
@@ -101,11 +121,9 @@ function Keybind.new(config, onChanged)
 
 			if holdToInteract then
 				held(true)
-				if callback then
-					callback(true)
-				end
-			elseif callback then
-				callback()
+				onFire(true)
+			else
+				onFire()
 			end
 		end)
 		vide.cleanup(beganConn)
@@ -115,11 +133,11 @@ function Keybind.new(config, onChanged)
 				return
 			end
 
+			-- Only release what we actually caught pressing: a key let go over the UI or in a
+			-- text box must not fire a ghost `false`.
 			if input.KeyCode.Name == key() and held() then
 				held(false)
-				if callback then
-					callback(false)
-				end
+				onFire(false)
 			end
 		end)
 		vide.cleanup(endedConn)
@@ -129,53 +147,42 @@ function Keybind.new(config, onChanged)
 			setListening(false)
 		end)
 
+		local hovered = source(false)
+
+		local boxColor = spring(function() -- lights up while it waits for the new key
+			if listening() then
+				return Colors.accent
+			end
+			return if hovered() then Colors.surfaceHigh2 else Colors.bg
+		end, 0.2)
+
 		return create("Frame")({
-			Size = UDim2.new(0.98, 0, 0, 60),
-			BackgroundColor3 = bgColor,
-			Visible = keybind.visible,
+			Size = UDim2.fromOffset(70, 34),
+			BackgroundColor3 = boxColor,
+			ZIndex = 2, -- above the row's click overlay, so the pill takes its own clicks
 
-			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+			create("UIStroke")({ Color = Colors.stroke, Thickness = 1.5 }),
 
-			create("TextLabel")({ -- name on the left
-				Size = UDim2.new(1, -140, 0.6, 0),
-				AnchorPoint = Vector2.new(0, 0.5),
-				Position = UDim2.new(0, 16, 0.5, 0),
+			create("TextLabel")({
+				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
+				ZIndex = 2,
 
-				Text = name,
+				Text = function()
+					return if listening() then "..." else key()
+				end,
 				TextColor3 = Colors.textPrimary,
-				TextSize = 22,
-				TextXAlignment = "Left",
+				TextSize = 20,
+				TextTruncate = "AtEnd",
 				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
-			}),
-
-			create("Frame")({ -- the key pill
-				Size = UDim2.fromOffset(96, 34),
-				AnchorPoint = Vector2.new(1, 0.5),
-				Position = UDim2.new(1, -16, 0.5, 0),
-				BackgroundColor3 = boxColor,
-
-				create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
-				create("UIStroke")({ Color = Colors.stroke, Thickness = 1.5 }),
-
-				create("TextLabel")({
-					Size = UDim2.fromScale(1, 1),
-					BackgroundTransparency = 1,
-
-					Text = function()
-						return if listening() then "..." else key()
-					end,
-					TextColor3 = Colors.textPrimary,
-					TextSize = 20,
-					TextTruncate = "AtEnd",
-					FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
-				}),
 			}),
 
 			create("TextButton")({
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
 				Text = "",
+				ZIndex = 3,
 
 				MouseEnter = function()
 					hovered(true)
@@ -187,6 +194,78 @@ function Keybind.new(config, onChanged)
 				Activated = function()
 					setListening(not listening()) -- click again to cancel
 				end,
+			}),
+		})
+	end
+
+	return badge
+end
+
+-- The standalone element: the badge, in a row of its own.
+function Keybind.new(config, onChanged)
+	local callback = config.Callback
+
+	local badge = Keybind.newBadge(config, function(...)
+		if callback then
+			callback(...)
+		end
+	end, onChanged)
+
+	local keybind = Element.new("Keybind", config, {
+		get = badge.get,
+		set = badge.set,
+	})
+
+	local name = keybind.name
+
+	function keybind:render()
+		local hovered = source(false)
+
+		local bgColor = spring(function()
+			return if hovered() then Colors.surfaceHover else Colors.surface
+		end, 0.3)
+
+		return create("Frame")({
+			Size = UDim2.new(0.98, 0, 0, 60),
+			BackgroundColor3 = bgColor,
+			Visible = keybind.visible,
+
+			create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+			create("TextLabel")({ -- name on the left
+				Size = UDim2.new(1, -110, 0.6, 0),
+				AnchorPoint = Vector2.new(0, 0.5),
+				Position = UDim2.new(0, 16, 0.5, 0),
+				BackgroundTransparency = 1,
+
+				Text = name,
+				TextColor3 = Colors.textPrimary,
+				TextSize = 22,
+				TextXAlignment = "Left",
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
+			}),
+
+			create("TextButton")({ -- row hover; the badge sits above it and eats its own clicks
+				Size = UDim2.fromScale(1, 1),
+				BackgroundTransparency = 1,
+				Text = "",
+
+				MouseEnter = function()
+					hovered(true)
+				end,
+				MouseLeave = function()
+					hovered(false)
+				end,
+			}),
+
+			create("Frame")({ -- anchors the badge to the right edge
+				Size = UDim2.fromOffset(70, 34),
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -16, 0.5, 0),
+				BackgroundTransparency = 1,
+				ZIndex = 2,
+
+				badge.render(),
 			}),
 		})
 	end

@@ -3,20 +3,16 @@
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-      "$path": "src/ReplicatedStorage",
       "PixlLib": {
-        "$path": "src/ReplicatedStorage/PixlLib",
+        "$path": "src/PixlLib",
         "Packages": {
           "$path": "Packages"
         }
       }
     },
-    "ServerScriptService": {
-      "$path": "src/ServerScriptService"
-    },
     "StarterPlayer": {
       "StarterPlayerScripts": {
-        "$path": "src/StarterPlayer"
+        "$path": "src/demo"
       }
     }
   }

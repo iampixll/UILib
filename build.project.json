@@ -3,7 +3,7 @@
     "tree": {
         "$path": "src/build-entry/MainModule.luau",
         "PixlLib": {
-            "$path": "src/ReplicatedStorage/PixlLib",
+            "$path": "src/PixlLib",
             "Packages": {
                 "$className": "Folder",
                 "vide": {
