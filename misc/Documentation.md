@@ -10,7 +10,9 @@ local PixlLib = loadstring(game:HttpGet("https://raw.githubusercontent.com/iampi
 ```luau
 local Window = PixlLib:CreateWindow({
 	Title = "PixlLib",
-	ToggleKey = "K", -- Enum.KeyCode name to minimize/restore, defaults to "K"
+	ToggleKey = "K", -- Enum.KeyCode name to minimize/restore, defaults to "K". Also
+	-- rebindable at runtime in the settings view (see below); with Saving on, the new
+	-- key is written to the config and survives a reload.
 
 	Configuration = { -- optional; omit to disable saving/loading
 		Saving = true, -- writes element values to file (needs executor writefile)
@@ -65,6 +67,22 @@ local Toggle = Tab:CreateToggle({
 	CurrentValue = false,
 	Flag = "Toggle1", -- identifier for config saving; keep every Flag unique
 	Callback = function(value) end, -- value is a boolean
+})
+```
+
+A toggle can carry its own keybind inline - a pill left of the switch that flips it. Give it a
+`Keybind` table with the same shape as a standalone Keybind element:
+
+```luau
+local Toggle = Tab:CreateToggle({
+	Name = "Auto collect orbs",
+	Flag = "AutoCollectOrbs",
+	Keybind = {
+		CurrentKeybind = "L", -- KeyCode name; the pill shows it and rebinds on click
+		HoldToInteract = false, -- true: on while held, off on release
+		Flag = "AutoCollectOrbsKey", -- own Flag, so the chosen key is saved too
+	},
+	Callback = function(value) end,
 })
 ```
 
@@ -180,6 +198,19 @@ Window:Minimize()       -- flips it
 Window:Minimize(true)   -- slides the window away, leaves the Open pill
 Window:IsMinimized()
 ```
+
+## Settings view
+The gear button in the topbar (between the player display and the minimize button) swaps the
+tab content for a built-in settings panel. There is no API to build - it is always there - and
+it holds two controls:
+
+- **Change UI keybind** - a rebind pill for the window's toggle key. Click it, press a new key
+  (Escape cancels). The change is live, and with `Saving` on it is written to the config, so it
+  survives a reload.
+- **Unload UI** - tears the whole interface down, same as `PixlLib:Destroy()` (flushes a pending
+  save, stops every active toggle, removes the GUI). It asks for a second click to confirm.
+
+Picking a tab in the sidebar leaves the settings view again.
 
 ## Library
 ```luau
