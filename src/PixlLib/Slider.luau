@@ -1,6 +1,6 @@
 local UserInputService = game:GetService("UserInputService")
 
-local vide = require("./Packages/vide")
+local vide = require("@vide")
 local Colors = require("./Colors")
 local Element = require("./Element")
 

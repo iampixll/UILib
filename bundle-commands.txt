@@ -1,0 +1,3 @@
+.\darklua.exe process src\PixlLib\init.luau source.luau
+
+.\darklua.exe process src\PixlLib\init.luau "C:\Users\milan\AppData\Local\Volt\workspace\vs-scripts\pixllib.luau" --watch

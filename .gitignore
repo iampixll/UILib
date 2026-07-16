@@ -1,10 +1,6 @@
-# Project place file
-/UILib.rbxlx
+# Build tool binary (kept locally, not in git — copy from the pet sim script or download darklua)
+/darklua.exe
 
 # Roblox Studio lock files
 /*.rbxlx.lock
 /*.rbxl.lock
-
-/wally.lock
-
-sourcemap.json

@@ -1,7 +1,7 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 
-local vide = require("./Packages/vide")
+local vide = require("@vide")
 local Colors = require("./Colors")
 local Icons = require("./Icons")
 local Keybind = require("./Keybind")
@@ -93,6 +93,14 @@ local function createTopbar(props)
 		return if minimizeHovered() then Colors.surfaceHigh2 else Colors.surfaceHover
 	end, 0.3)
 
+	local settingsHovered = source(false)
+	local settingsColor = spring(function()
+		if props.settingsOpen() then
+			return Colors.accent -- clearly "on" while the settings view is showing
+		end
+		return if settingsHovered() then Colors.surfaceHigh2 else Colors.surfaceHover
+	end, 0.3)
+
 	return create("Frame")({ -- floating panel: PAD inset on top/left/right, fixed height
 		Size = UDim2.new(1, -PAD * 2, 0, TOPBAR_H),
 		Position = UDim2.fromOffset(PAD, PAD),
@@ -117,7 +125,7 @@ local function createTopbar(props)
 			Size = UDim2.fromOffset(0, 40), -- X grows with content, Y fixed
 			AutomaticSize = "X",
 			AnchorPoint = Vector2.new(1, 0.5),
-			Position = UDim2.new(0.98, -55, 0.5, 0),
+			Position = UDim2.new(0.98, -96, 0.5, 0), -- left of both settings + minimize buttons
 			BackgroundColor3 = Colors.surfaceHover, -- control resting on the bg panel
 
 			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
@@ -162,6 +170,35 @@ local function createTopbar(props)
 				TextXAlignment = "Left",
 				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
 			}),
+		}),
+
+		create("ImageButton")({ -- settings button
+			Size = UDim2.fromOffset(40, 40),
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(0.98, -48, 0.5, 0), -- left of the minimize button (40px + 8px gap)
+			BackgroundColor3 = settingsColor,
+			Image = "", -- glyph lives on the inner label so it can be scaled down
+
+			create("UICorner")({ CornerRadius = UDim.new(0, 8) }),
+
+			create("ImageLabel")({ -- gear glyph, inset so it doesn't fill the whole button
+				Size = UDim2.fromScale(0.78, 0.78),
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				BackgroundTransparency = 1,
+
+				Image = Icons.resolve("settings"),
+				ImageColor3 = Colors.textPrimary,
+			}),
+
+			MouseButton1Click = props.onSettings,
+
+			MouseEnter = function()
+				settingsHovered(true)
+			end,
+			MouseLeave = function()
+				settingsHovered(false)
+			end,
 		}),
 
 		create("ImageButton")({ -- minimize button
@@ -392,7 +429,7 @@ local function createCurrentTab(props)
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
 				Visible = function()
-					return props.activeTab() == tab()
+					return props.activeTab() == tab() and not props.settingsOpen()
 				end,
 
 				create("ScrollingFrame")({
@@ -422,6 +459,145 @@ local function createCurrentTab(props)
 	})
 end
 
+local function createSettingsPanel(props)
+	return create("Frame")({ -- shares the content area, shown instead of the active tab
+		Size = UDim2.new(1, -(PAD + TABLIST_W + PAD + PAD), 1, -(ROW_Y + PAD)),
+		Position = UDim2.fromOffset(PAD + TABLIST_W + PAD, ROW_Y),
+		BackgroundColor3 = Colors.bg,
+		Visible = props.settingsOpen,
+
+		create("UICorner")({
+			CornerRadius = UDim.new(0, 12),
+		}),
+
+		create("ScrollingFrame")({
+			Size = UDim2.fromScale(0.975, 0.95),
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.5),
+			BackgroundTransparency = 1,
+			ScrollBarThickness = 4,
+			ScrollBarImageColor3 = Colors.textMuted,
+			AutomaticCanvasSize = "Y",
+			CanvasSize = UDim2.new(),
+
+			create("UIListLayout")({
+				Padding = UDim.new(0, 12),
+				HorizontalAlignment = "Left",
+				SortOrder = "LayoutOrder",
+			}),
+
+			create("TextLabel")({ -- panel heading
+				Size = UDim2.new(1, 0, 0, 44),
+				LayoutOrder = 1,
+				BackgroundTransparency = 1,
+
+				Text = "Settings",
+				TextColor3 = Colors.textPrimary,
+				TextXAlignment = "Left",
+				TextSize = 30,
+				FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
+			}),
+
+			create("Frame")({ -- change UI keybind: label left, rebind pill right
+				Size = UDim2.new(0.98, 0, 0, 60),
+				LayoutOrder = 2,
+				BackgroundColor3 = Colors.surface,
+
+				create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+				create("TextLabel")({
+					Size = UDim2.new(1, -110, 0.6, 0),
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 16, 0.5, 0),
+					BackgroundTransparency = 1,
+
+					Text = "Change UI keybind",
+					TextColor3 = Colors.textPrimary,
+					TextSize = 22,
+					TextXAlignment = "Left",
+					FontFace = Font.fromName("Montserrat", Enum.FontWeight.Medium),
+				}),
+
+				create("Frame")({ -- anchors the pill to the right edge
+					Size = UDim2.fromOffset(70, 34),
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -16, 0.5, 0),
+					BackgroundTransparency = 1,
+					ZIndex = 2,
+
+					props.keyBadge.render(),
+				}),
+			}),
+
+			(function() -- unload UI: destructive, so it reads red and needs a confirming second click
+				local hovered = source(false)
+				local armed = source(false) -- first click arms; a second click within the timeout unloads
+				local armToken = 0
+
+				local bgColor = spring(function()
+					if armed() then
+						return Color3.fromRGB(150, 40, 48) -- brighter alarm once armed
+					end
+					return if hovered() then Color3.fromRGB(122, 48, 56) else Color3.fromRGB(46, 28, 32)
+				end, 0.3)
+
+				return create("Frame")({
+					Size = UDim2.new(0.98, 0, 0, 48),
+					LayoutOrder = 3,
+					BackgroundColor3 = bgColor,
+
+					create("UICorner")({ CornerRadius = UDim.new(0, 12) }),
+
+					create("TextLabel")({
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+
+						Text = function()
+							return if armed() then "Click again to confirm" else "Unload UI"
+						end,
+						TextColor3 = Color3.fromRGB(255, 180, 186),
+						TextSize = 22,
+						FontFace = Font.fromName("Montserrat", Enum.FontWeight.Bold),
+					}),
+
+					create("TextButton")({
+						Size = UDim2.fromScale(1, 1),
+						BackgroundTransparency = 1,
+						Text = "",
+
+						MouseEnter = function()
+							hovered(true)
+						end,
+						MouseLeave = function()
+							hovered(false)
+						end,
+
+						Activated = function()
+							if armed() then
+								armed(false)
+								if props.onUnload then
+									props.onUnload()
+								end
+								return
+							end
+
+							-- Arm, then disarm on a timeout unless it was pressed again first.
+							armed(true)
+							armToken += 1
+							local myToken = armToken
+							task.delay(3, function()
+								if armToken == myToken then
+									armed(false)
+								end
+							end)
+						end,
+					}),
+				})
+			end)(),
+		}),
+	})
+end
+
 local function createNotificationStack(props)
 	return create("Frame")({
 		Size = UDim2.new(0, 350, 1, 0),
@@ -447,7 +623,7 @@ local function createNotificationStack(props)
 	})
 end
 
-function Window.new(config, notifications, flags, onChanged)
+function Window.new(config, notifications, flags, onChanged, onUnload)
 	config = config or {}
 
 	local self = setmetatable({}, Window)
@@ -458,17 +634,33 @@ function Window.new(config, notifications, flags, onChanged)
 	self.tabs = source({})
 	self.activeTab = source(nil)
 
-	local toggleKey = Enum.KeyCode[config.ToggleKey or "K"]
+	-- Held as a source so the settings panel can rebind the open/close key at runtime.
+	local initialKey = config.ToggleKey or "K"
+	if not Enum.KeyCode[initialKey] then
+		initialKey = "K"
+	end
+	local toggleKeyName = source(initialKey)
 
 	-- Off-limits for keybind elements: a rebind pressing this key cancels instead of stealing
-	-- the shortcut that opens and closes the whole window.
-	Keybind.Reserve(toggleKey.Name)
+	-- the shortcut that opens and closes the whole window. The reservation follows a live rebind.
+	Keybind.Reserve(toggleKeyName())
 	vide.cleanup(function()
-		Keybind.Unreserve(toggleKey.Name)
+		Keybind.Unreserve(toggleKeyName())
 	end)
+
+	-- Swaps the reserved key and the live toggle in one step. Fed by the settings keybind pill.
+	local function setToggleKey(newName)
+		if newName == toggleKeyName() or not Enum.KeyCode[newName] then
+			return
+		end
+		Keybind.Unreserve(toggleKeyName())
+		toggleKeyName(newName)
+		Keybind.Reserve(newName)
+	end
 
 	local scale = source(1)
 	local minimized = source(false)
+	local settingsOpen = source(false)
 
 	local topButtonPos = source(UDim2.new(0.5, 0, 0, 10))
 	local topDisplayPos = spring(topButtonPos, 0.1)
@@ -511,7 +703,7 @@ function Window.new(config, notifications, flags, onChanged)
 			return
 		end
 
-		if input.KeyCode == toggleKey then
+		if input.KeyCode.Name == toggleKeyName() then
 			toggleMinimized()
 		end
 	end)
@@ -523,6 +715,31 @@ function Window.new(config, notifications, flags, onChanged)
 	self.enabled = enabled
 	self.minimized = minimized
 	self.toggleMinimized = toggleMinimized
+
+	-- The rebind pill shown in the settings panel. onFire is a no-op: the window's own global
+	-- handler already reacts to the key, so the badge is purely the rebind UI. onChanged fires
+	-- once the pill has captured a new key, pushes it into the live toggle, and requests a save
+	-- so the choice survives a reload (only actually written when config.Saving is on).
+	local toggleKeyBadge
+	toggleKeyBadge = Keybind.newBadge({ CurrentKeybind = toggleKeyName() }, function() end, function()
+		setToggleKey(toggleKeyBadge.get())
+		if self.onChanged then
+			self.onChanged()
+		end
+	end)
+
+	-- Read/write the toggle key from outside (config load). The setter also updates the visible
+	-- pill and does NOT request a save, so restoring from disk cannot loop back into a write.
+	self.getToggleKey = function()
+		return toggleKeyName()
+	end
+	self.setToggleKey = function(name)
+		if not Enum.KeyCode[name] then
+			return
+		end
+		setToggleKey(name) -- live key + reservation
+		toggleKeyBadge.set(name) -- pill display (no fire, so no onChanged)
+	end
 
 	self.node = create("ScreenGui")({
 		Name = "PixlLib",
@@ -548,6 +765,10 @@ function Window.new(config, notifications, flags, onChanged)
 			createTopbar({
 				title = config.Title,
 				onMinimize = toggleMinimized,
+				onSettings = function()
+					settingsOpen(not settingsOpen())
+				end,
+				settingsOpen = settingsOpen,
 				onDragBegan = mainDrag.began,
 				onDragEnded = mainDrag.ended,
 
@@ -560,11 +781,18 @@ function Window.new(config, notifications, flags, onChanged)
 				activeTab = self.activeTab,
 				onSelect = function(tab)
 					self.activeTab(tab)
+					settingsOpen(false) -- picking a tab returns from the settings view
 				end,
 			}),
 			createCurrentTab({
 				tabs = self.tabs,
 				activeTab = self.activeTab,
+				settingsOpen = settingsOpen,
+			}),
+			createSettingsPanel({
+				settingsOpen = settingsOpen,
+				keyBadge = toggleKeyBadge,
+				onUnload = onUnload,
 			}),
 		}),
 

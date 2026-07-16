@@ -1,0 +1,7 @@
+{
+    "generator": "retain_lines",
+    "rules": [],
+    "bundle": {
+        "require_mode": "path"
+    }
+}

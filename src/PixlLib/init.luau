@@ -1,7 +1,7 @@
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
-local vide = require("./Packages/vide")
+local vide = require("@vide")
 local Window = require("./Window")
 
 local source = vide.source
@@ -64,6 +64,8 @@ function PixlLib:Save()
 	local payload = {
 		version = CONFIG_VERSION,
 		values = values,
+		-- The window toggle key lives outside the Flags map, so it rides along separately.
+		toggleKey = self._window and self._window.getToggleKey and self._window.getToggleKey() or nil,
 	}
 
 	if not canWrite() then
@@ -129,6 +131,12 @@ function PixlLib:Load()
 
 	-- v1 wraps the values; anything older was a flat map of flag -> value
 	local values = decoded.values or decoded
+
+	-- Restore the window toggle key before the flags: it is independent of them, and doing it
+	-- up front keeps the reservation correct while the elements below load.
+	if decoded.toggleKey and self._window and self._window.setToggleKey then
+		self._window.setToggleKey(decoded.toggleKey)
+	end
 
 	-- Whether restoring a value should run the element's callback. On by default, so a saved
 	-- toggle actually turns its feature back on - a config that restores the switch but not
@@ -201,7 +209,11 @@ function PixlLib:CreateWindow(config)
 
 	local window
 	local destroyScope = vide.mount(function()
-		window = Window.new(config, notifications, self.Flags, requestSave)
+		-- onUnload lets the settings panel's "Unload UI" button trigger the same full teardown
+		-- (flush pending config, stop features, destroy the tree) as calling PixlLib:Destroy().
+		window = Window.new(config, notifications, self.Flags, requestSave, function()
+			self:Destroy()
+		end)
 		return window.node
 	end, getGuiParent())
 
